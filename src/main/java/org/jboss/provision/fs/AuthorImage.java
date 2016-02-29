@@ -39,7 +39,7 @@ import org.jboss.provision.util.IoUtils;
  *
  * @author Alexey Loubyansky
  */
-class AuthorSession extends FSSession {
+public class AuthorImage extends FSSession {
 
     private static final String PATHS = "paths.txt";
 
@@ -47,22 +47,33 @@ class AuthorSession extends FSSession {
     private final String author;
     private Set<String> paths;
 
-    AuthorSession(AuthorHistory history, String author, String sessionId) {
+    AuthorImage(AuthorHistory history, String author, String sessionId) {
         super(history, sessionId);
         this.history = history;
         this.author = author;
     }
 
-    String getName() {
+    public String getAuthorName() {
         return author;
     }
 
-    Set<String> getPaths() throws ProvisionException {
+    public Set<String> getPaths() throws ProvisionException {
         if(paths != null) {
             return paths;
         }
+
         paths = new HashSet<String>();
-        final File pathsFile = new File(sessionDir, PATHS);
+        File pathsFile;
+        if(sessionDir.exists()) {
+            pathsFile = new File(sessionDir, PATHS);
+        } else { // if the current dir does not exist then load the paths from the last committed image
+            final File lastSessionDir = history.getLastSessionDir();
+            if(lastSessionDir != null) {
+                pathsFile = new File(lastSessionDir, PATHS);
+            } else {
+                return paths;
+            }
+        }
         if (pathsFile.exists()) {
             BufferedReader reader = null;
             try {
@@ -99,7 +110,6 @@ class AuthorSession extends FSSession {
     @Override
     protected void schedulePersistence(FSImage fsImage) throws ProvisionException {
         super.schedulePersistence(fsImage);
-
         fsImage.write(new ContentWriter(new File(sessionDir, PATHS)) {
             @Override
             public void write(BufferedWriter writer) throws IOException, ProvisionException {

@@ -205,8 +205,8 @@ public class FSImage extends FSReadOnlyImage {
     void schedulePersistence() throws ProvisionException {
         schedulePersistence(this);
         final Set<String> notAffectedAuthors = new HashSet<String>(AuthorHistory.listAuthors(fsEnv));
-        for(AuthorSession author : authors.values()) {
-            notAffectedAuthors.remove(author.getName());
+        for(AuthorImage author : authors.values()) {
+            notAffectedAuthors.remove(author.getAuthorName());
             author.schedulePersistence(this);
         }
         if(!notAffectedAuthors.isEmpty()) {

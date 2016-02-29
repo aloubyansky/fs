@@ -55,7 +55,6 @@ abstract class FSSessionHistory {
     }
 
     protected final File historyDir;
-    private String lastSessionId;
 
     protected FSSessionHistory(File historyDir) {
         assert historyDir != null : ProvisionErrors.nullArgument("historyDir");
@@ -75,18 +74,14 @@ abstract class FSSessionHistory {
     }
 
     String getLastSessionId() throws ProvisionException {
-        if(lastSessionId != null) {
-            return lastSessionId;
-        }
         final File lastTxt = new File(historyDir, LAST_SESSION_TXT);
         if(!lastTxt.exists()) {
             return null;
         }
         try {
-            lastSessionId = FileUtils.readFile(lastTxt);
+            return FileUtils.readFile(lastTxt);
         } catch (IOException e) {
             throw ProvisionErrors.readError(IoUtils.newFile(historyDir, LAST_SESSION_TXT), e);
         }
-        return lastSessionId;
     }
 }

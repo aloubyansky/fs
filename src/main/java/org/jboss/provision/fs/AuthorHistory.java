@@ -24,9 +24,13 @@ package org.jboss.provision.fs;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
 import org.jboss.provision.util.IoUtils;
 
@@ -48,7 +52,7 @@ public class AuthorHistory extends FSSessionHistory {
         return new File(getAuthorsDir(env), author);
     }
 
-    static File getAuthorSessionDir(FSEnvironment env, String author, String sessionId) {
+    static File getAuthorImageDir(FSEnvironment env, String author, String sessionId) {
         return new File(getAuthorHistoryDir(env, author), sessionId);
     }
 
@@ -61,7 +65,83 @@ public class AuthorHistory extends FSSessionHistory {
     }
 
     static File getBackupPath(String author, FSReadOnlyImage fsImage, String relativePath) {
-        return IoUtils.newFile(getAuthorSessionDir(fsImage.getFSEnvironment(), author, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
+        return IoUtils.newFile(getAuthorImageDir(fsImage.getFSEnvironment(), author, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
+    }
+
+    static AuthorImage loadAuthorImage(FSEnvironment env, String author, String sessionId) throws ProvisionException {
+        File dir = getAuthorHistoryDir(env, author);
+        if(!dir.exists()) {
+            throw ProvisionErrors.unknownUnit(author);
+        }
+        dir = getLastUpdateDir(dir, sessionId);
+        if(dir == null) {
+            return null;
+        }
+        return new AuthorHistory(env, author).loadSession(dir.getName());
+    }
+
+    static List<String> listAuthors(FSEnvironment env, String sessionId) throws ProvisionException {
+        final List<String> allAuthors = listAuthors(env);
+        if(allAuthors.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if(allAuthors.size() == 1) {
+            final File imagePath = getLastUpdateDir(getAuthorHistoryDir(env, allAuthors.get(0)), sessionId);
+            if(imagePath == null) {
+                return Collections.emptyList();
+            }
+            return Collections.singletonList(allAuthors.get(0));
+        }
+        final List<String> authors = new ArrayList<String>(allAuthors.size());
+        for(String author : allAuthors) {
+            final File imagePath = getLastUpdateDir(getAuthorHistoryDir(env, author), sessionId);
+            if(imagePath != null) {
+                authors.add(author);
+            }
+        }
+        return authors;
+    }
+
+/*    static List<AuthorImage> loadAuthorImages(FSEnvironment env, String sessionId) throws ProvisionException {
+
+        final List<String> authors = listAuthors(env);
+        if(authors.isEmpty()) {
+            return Collections.emptyList();
+        }
+        if(authors.size() == 1) {
+            final File imagePath = getLastUpdateDir(getAuthorHistoryDir(env, authors.get(0)), sessionId);
+            if(imagePath == null) {
+                return Collections.emptyList();
+            }
+            return Collections.singletonList(new AuthorHistory(env, authors.get(0)).loadSession(imagePath.getName()));
+        }
+        final List<AuthorImage> images = new ArrayList<AuthorImage>(authors.size());
+        for(String author : authors) {
+            final File imagePath = getLastUpdateDir(getAuthorHistoryDir(env, author), sessionId);
+            if(imagePath != null) {
+                images.add(new AuthorHistory(env, author).loadSession(imagePath.getName()));
+            }
+        }
+        return images;
+    }
+*/
+    private static File getLastUpdateDir(File authorHistoryDir, String sessionId) throws ProvisionException {
+        File sessionPath = new File(authorHistoryDir, sessionId);
+        if(!sessionPath.exists()) {
+            return null;
+        }
+        if(sessionPath.isFile()) {
+            try {
+                sessionId = FileUtils.readFile(sessionPath);
+            } catch (IOException e) {
+                throw ProvisionErrors.readError(sessionPath, e);
+            }
+            sessionPath = new File(authorHistoryDir, sessionId);
+            if(!sessionPath.exists()) {
+                throw ProvisionErrors.pathDoesNotExist(sessionPath);
+            }
+        }
+        return sessionPath;
     }
 
     private final FSEnvironment env;
@@ -81,19 +161,19 @@ public class AuthorHistory extends FSSessionHistory {
             }}));
     }
 
-    AuthorSession newSession(String sessionId) {
-        return new AuthorSession(this, author, sessionId);
+    AuthorImage newSession(String sessionId) {
+        return new AuthorImage(this, author, sessionId);
     }
 
-    AuthorSession loadSession(String sessionId) throws ProvisionException {
-        return new AuthorSession(this, author, sessionId);
+    AuthorImage loadSession(String sessionId) throws ProvisionException {
+        return new AuthorImage(this, author, sessionId);
     }
 
-    AuthorSession loadLast() throws ProvisionException {
-        final String sessionId = this.getLastSessionId();
+    AuthorImage loadLast() throws ProvisionException {
+        final String sessionId = getLastSessionId();
         if(sessionId == null) {
             return null;
         }
-        return loadSession(sessionId);
+        return new AuthorImage(this, author, sessionId);
     }
 }

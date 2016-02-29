@@ -25,6 +25,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.jboss.provision.ProvisionErrors;
@@ -38,7 +39,7 @@ import org.jboss.provision.util.HashUtils;
 public class FSReadOnlyImage extends FSSession {
 
     protected final FSEnvironment fsEnv;
-    protected Map<String, AuthorSession> authors = Collections.emptyMap();
+    protected Map<String, AuthorImage> authors = Collections.emptyMap();
     protected final PathsOwnership ownership;
 
     public FSReadOnlyImage(FSEnvironment env, String sessionId) {
@@ -49,6 +50,14 @@ public class FSReadOnlyImage extends FSSession {
 
     protected FSEnvironment getFSEnvironment() {
         return fsEnv;
+    }
+
+    public AuthorImage getAuthorImage(String author) throws ProvisionException {
+        return AuthorHistory.loadAuthorImage(fsEnv, author, sessionId);
+    }
+
+    public List<String> getAuthors() throws ProvisionException {
+        return AuthorHistory.listAuthors(fsEnv, sessionId);
     }
 
     public String readContent(String relativePath) throws ProvisionException {
@@ -90,8 +99,8 @@ public class FSReadOnlyImage extends FSSession {
         return HashUtils.hashFile(target);
     }
 
-    protected AuthorSession addAuthor(String author) {
-        AuthorSession session = authors.get(author);
+    protected AuthorImage addAuthor(String author) {
+        AuthorImage session = authors.get(author);
         if(session != null) {
             return session;
         }
@@ -101,7 +110,7 @@ public class FSReadOnlyImage extends FSSession {
                 authors = Collections.singletonMap(author, session);
                 break;
             case 1:
-                authors = new HashMap<String, AuthorSession>(authors);
+                authors = new HashMap<String, AuthorImage>(authors);
             default:
                 authors.put(author, session);
         }
