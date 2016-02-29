@@ -114,7 +114,7 @@ class PathsOwnership {
         authorPaths = Collections.emptyMap();
     }
 
-    void addAuthor(String path, String author) throws ProvisionException {
+    void grab(String author, String path) throws ProvisionException {
         boolean added = false;
         PathOwnership ownership = ownerships.get(path);
         if(ownership != null) {
@@ -135,7 +135,7 @@ class PathsOwnership {
         }
     }
 
-    boolean removeAuthor(String path, String author) throws ProvisionException {
+    boolean giveUp(String author, String path) throws ProvisionException {
         boolean removed = false;
         PathOwnership ownership = ownerships.get(path);
         if (ownership != null) {

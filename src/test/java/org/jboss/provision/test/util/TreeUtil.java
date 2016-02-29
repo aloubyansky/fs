@@ -24,10 +24,10 @@ package org.jboss.provision.test.util;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.LinkedList;
 
 import org.jboss.provision.util.HashUtils;
-import org.jboss.provision.util.PropertyUtils;
 
 /**
  *
@@ -35,44 +35,41 @@ import org.jboss.provision.util.PropertyUtils;
  */
 public class TreeUtil {
 
-    private static final String LN = PropertyUtils.getSystemProperty("line.separator");
-
     public static void logTree(File f) throws IOException {
-        final StringBuilder buf = new StringBuilder();
-        buildTree(f, buf, new LinkedList<Boolean>());
-        System.out.println(buf.toString());
+        buildTree(f, System.out, new LinkedList<Boolean>());
     }
 
-    private static void buildTree(File f, StringBuilder buf, LinkedList<Boolean> depth) throws IOException {
+    private static void buildTree(File f, PrintStream out, LinkedList<Boolean> depth) throws IOException {
 
         if(!depth.isEmpty()) {
             for(int i = 0; i < depth.size() - 1; ++i) {
                 if(depth.get(i)) {
-                    buf.append("|  ");
+                    out.print("|  ");
                 } else {
-                    buf.append("   ");
+                    out.print("   ");
                 }
             }
             if(depth.getLast()) {
-                buf.append("|--");
+                out.print("|--");
             } else {
-                buf.append("`--");
+                out.print("`--");
             }
         }
-        buf.append(f.getName());
+        out.print(f.getName());
         if(f.isDirectory()) {
-            buf.append(LN);
+            out.println();
             final File[] files = f.listFiles();
             int i = 0;
             while(i < files.length) {
                 final File c = files[i++];
                 depth.addLast(i != files.length);
-                buildTree(c, buf, depth);
+                buildTree(c, out, depth);
                 depth.removeLast();
             }
         } else {
-            buf.append(" (hash=").append(HashUtils.bytesToHexString(HashUtils.hashFile(f))).append(')');
-            buf.append(LN);
+            out.print(" (hash=");
+            out.print(HashUtils.bytesToHexString(HashUtils.hashFile(f)));
+            out.println(')');
         }
     }
 }

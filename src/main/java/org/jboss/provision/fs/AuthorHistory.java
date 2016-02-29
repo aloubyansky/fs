@@ -60,7 +60,7 @@ public class AuthorHistory extends FSSessionHistory {
         return Arrays.asList(authorsDir.list());
     }
 
-    static File getBackupPath(String author, FSImage fsImage, String relativePath) {
+    static File getBackupPath(String author, FSReadOnlyImage fsImage, String relativePath) {
         return IoUtils.newFile(getAuthorSessionDir(fsImage.getFSEnvironment(), author, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
     }
 

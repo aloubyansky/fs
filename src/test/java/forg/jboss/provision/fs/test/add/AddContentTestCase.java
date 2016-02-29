@@ -22,6 +22,7 @@
 
 package forg.jboss.provision.fs.test.add;
 
+import org.jboss.provision.test.util.FSAssert;
 import org.jboss.provision.test.util.TreeUtil;
 import org.junit.Test;
 
@@ -30,7 +31,6 @@ import org.junit.Test;
  * @author Alexey Loubyansky
  */
 public class AddContentTestCase extends FSTestBase {
-
 
     @Test
     public void testMain() throws Exception {
@@ -53,5 +53,11 @@ public class AddContentTestCase extends FSTestBase {
             .commit();
 
         TreeUtil.logTree(homeDir);
+
+        FSAssert.assertPaths(env,
+                "aaa.txt",
+                "a/aa/aaa.txt",
+                "a/aa.txt",
+                "d.txt");
     }
 }

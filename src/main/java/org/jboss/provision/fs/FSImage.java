@@ -25,7 +25,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -40,9 +39,9 @@ import org.jboss.provision.util.HashUtils;
  *
  * @author Alexey Loubyansky
  */
-public class FSImage extends FSSession{
+public class FSImage extends FSReadOnlyImage {
 
-    private static class OpDescr {
+    static class OpDescr {
         ContentTask contentTask;
         OpDescr(ContentTask contentTask) {
             this.contentTask = contentTask;
@@ -52,27 +51,56 @@ public class FSImage extends FSSession{
         }
     }
 
-    private final FSEnvironment fsEnv;
-    private Map<String, OpDescr> updates = new LinkedHashMap<String, OpDescr>();
-    private Map<String, AuthorSession> authors = Collections.emptyMap();
-    private final PathsOwnership ownership;
-
-    FSImage(FSEnvironment fsEnv, String sessionId, PathsOwnership ownership) {
-        super(fsEnv, sessionId);
-        this.fsEnv = fsEnv;
-        this.ownership = ownership;
-    }
+    Map<String, OpDescr> updates = new LinkedHashMap<String, OpDescr>();
 
     FSImage(FSEnvironment fsEnv, String sessionId) {
-        this(fsEnv, sessionId, null);
+        super(fsEnv, sessionId);
     }
 
     FSImage(FSEnvironment fsEnv) {
-        this(fsEnv, UUID.randomUUID().toString(), PathsOwnership.getInstance(fsEnv.getHistoryDir()));
+        super(fsEnv, UUID.randomUUID().toString());
     }
 
-    FSEnvironment getFSEnvironment() {
-        return fsEnv;
+    @Override
+    protected String readContent(File target) throws ProvisionException {
+        final OpDescr opDescr = updates.get(target.getAbsolutePath());
+        if(opDescr == null) {
+            return super.readContent(target);
+        }
+        if(opDescr.contentTask.isDelete()) {
+            return null;
+        }
+        return opDescr.contentTask.getContentString();
+    }
+
+    @Override
+    protected boolean exists(File target) {
+        final OpDescr opDescr = updates.get(target.getAbsolutePath());
+        if(opDescr == null) {
+            return target.exists();
+        }
+        return !opDescr.contentTask.isDelete();
+    }
+
+    @Override
+    protected byte[] getHash(File target) throws IOException {
+        final OpDescr opDescr = updates.get(target.getAbsolutePath());
+        if (opDescr == null) {
+            return super.getHash(target);
+        }
+        if (opDescr.contentTask.isDelete()) {
+            return null;
+        }
+        if (opDescr.contentTask.getContentFile() != null) {
+            return HashUtils.hashFile(opDescr.contentTask.getContentFile());
+        }
+        if (opDescr.contentTask.getContentString() != null) {
+            return HashUtils.hashBytes(opDescr.contentTask.getContentString().getBytes());
+        }
+        if (!opDescr.contentTask.getTarget().exists()) {
+            return null;
+        }
+        return HashUtils.hashFile(opDescr.contentTask.getTarget());
     }
 
     FSImage write(ContentWriter contentWriter) throws ProvisionException {
@@ -93,8 +121,8 @@ public class FSImage extends FSSession{
             updates.put(targetPath, new OpDescr(contentWriter));
         }
         if(author != null) {
-            ownership.addAuthor(relativePath, author);
-            getAuthor(author).addPath(relativePath);
+            ownership.grab(author, relativePath);
+            addAuthor(author).addPath(relativePath);
         }
         return this;
     }
@@ -125,10 +153,10 @@ public class FSImage extends FSSession{
             }
         } else {
             if(author != null) {
-                if(!ownership.removeAuthor(relativePath, author)) {
+                if(!ownership.giveUp(author, relativePath)) {
                     throw ProvisionErrors.authorDoesNotOwnTargetPath(author, target.getAbsolutePath());
                 }
-                getAuthor(author).removePath(relativePath);
+                addAuthor(author).removePath(relativePath);
             }
         }
     }
@@ -153,39 +181,13 @@ public class FSImage extends FSSession{
         return this;
     }
 
+    public FSImage mkdirs(String relativePath) throws ProvisionException {
+        mkdirs(fsEnv.getFile(relativePath));
+        return this;
+    }
+
     void mkdirs(File dir) throws ProvisionException {
         write(new MkDirsWriter(dir), null, null);
-    }
-
-    public String readContent(String relativePath) throws ProvisionException {
-        return readContent(fsEnv.getFile(relativePath));
-    }
-
-    public String readContent(File target) throws ProvisionException {
-        final OpDescr opDescr = updates.get(target.getAbsolutePath());
-        if(opDescr == null) {
-            if(!target.exists()) {
-                return null;
-            }
-            try {
-                return FileUtils.readFile(target);
-            } catch (IOException e) {
-                throw ProvisionErrors.readError(target, e);
-            }
-        }
-        if(opDescr.contentTask.isDelete()) {
-            return null;
-        }
-        return opDescr.contentTask.getContentString();
-    }
-
-    public boolean exists(String relativePath) {
-        final File target = fsEnv.getFile(relativePath);
-        final OpDescr opDescr = updates.get(target.getAbsolutePath());
-        if(opDescr == null) {
-            return target.exists();
-        }
-        return !opDescr.contentTask.isDelete();
     }
 
     public boolean isDeleted(String relativePath) {
@@ -198,34 +200,6 @@ public class FSImage extends FSSession{
             return false;
         }
         return opDescr.contentTask.isDelete();
-    }
-
-    public byte[] getHash(String relativePath) throws ProvisionException {
-        final File target = fsEnv.getFile(relativePath);
-        final OpDescr opDescr = updates.get(target.getAbsolutePath());
-        try {
-            if (opDescr == null) {
-                if (!target.exists()) {
-                    return null;
-                }
-                return HashUtils.hashFile(target);
-            }
-            if (opDescr.contentTask.isDelete()) {
-                return null;
-            }
-            if (opDescr.contentTask.getContentFile() != null) {
-                return HashUtils.hashFile(opDescr.contentTask.getContentFile());
-            }
-            if (opDescr.contentTask.getContentString() != null) {
-                return HashUtils.hashBytes(opDescr.contentTask.getContentString().getBytes());
-            }
-            if (!opDescr.contentTask.getTarget().exists()) {
-                return null;
-            }
-            return HashUtils.hashFile(opDescr.contentTask.getTarget());
-        } catch (IOException e) {
-            throw ProvisionErrors.hashCalculationFailed(target, e);
-        }
     }
 
     void schedulePersistence() throws ProvisionException {
@@ -306,23 +280,5 @@ public class FSImage extends FSSession{
         for(OpDescr op : updates.values()) {
             out.println(op.contentTask);
         }
-    }
-
-    private AuthorSession getAuthor(String author) {
-        AuthorSession session = authors.get(author);
-        if(session != null) {
-            return session;
-        }
-        session = new AuthorHistory(fsEnv, author).newSession(sessionId);
-        switch(authors.size()) {
-            case 0:
-                authors = Collections.singletonMap(author, session);
-                break;
-            case 1:
-                authors = new HashMap<String, AuthorSession>(authors);
-            default:
-                authors.put(author, session);
-        }
-        return session;
     }
 }

@@ -47,7 +47,8 @@ public class FSEnvironment extends FSSessionHistory {
         return homeDir;
     }
 
-    public File getHistoryDir() {
+    @Override
+    File getHistoryDir() {
         return historyDir;
     }
 
@@ -66,11 +67,11 @@ public class FSEnvironment extends FSSessionHistory {
         return new FSImage(this);
     }
 
-    public FSImage loadImage(String id) throws ProvisionException {
-        return new FSImage(this, id);
+    public FSReadOnlyImage loadImage(String id) throws ProvisionException {
+        return new FSReadOnlyImage(this, id);
     }
 
-    public FSImage loadLatest() throws ProvisionException {
+    public FSReadOnlyImage loadLatest() throws ProvisionException {
         final String sessionId = getLastSessionId();
         if(sessionId == null) {
             return null;
