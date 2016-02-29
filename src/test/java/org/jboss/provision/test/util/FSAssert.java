@@ -44,6 +44,10 @@ public class FSAssert {
     private FSAssert() {
     }
 
+    public static void assertEmpty(FSEnvironment env) throws Exception {
+        assertPaths(env);
+    }
+
     public static void assertPaths(FSEnvironment env, String... path) throws Exception {
         final File envHome = env.getHomeDir();
         final Leaf root = new Leaf(null, envHome.getName());

@@ -20,44 +20,40 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-package forg.jboss.provision.fs.test.add;
+package forg.jboss.provision.fs.test;
 
+import static org.junit.Assert.fail;
+
+import java.io.File;
+
+import org.jboss.provision.ProvisionException;
 import org.jboss.provision.test.util.FSAssert;
-import org.jboss.provision.test.util.TreeUtil;
+import org.jboss.provision.test.util.FSUtils;
 import org.junit.Test;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class AddContentTestCase extends FSTestBase {
+public class DeleteNotOwnedPathTestCase extends FSTestBase {
 
     @Test
     public void testMain() throws Exception {
 
-        env.newImage()
-            .write("a", "a/aa/aaa.txt", "userA")
-            .write("a", "aaa.txt", "userA")
-            .write("b", "a/aa/bbb.txt", "userB")
-            .write("c", "c/cc/ccc.txt", "userC")
-            .commit();
+        FSAssert.assertEmpty(env);
+        assertEmptyDir(env.getHomeDir());
+        FSUtils.writeFile(new File(env.getHomeDir(), "a.txt"), "original");
+        assertNotEmptyDir(env.getHomeDir());
 
-        TreeUtil.logTree(homeDir);
+        try {
+            env.newImage().delete("a.txt", "userA");
+            fail("cannot delete not own path");
+        } catch(ProvisionException e) {
+            // denied
+        }
 
-        env.newImage()
-            .write("aa", "a/aa/aaa.txt", "userA")
-            .write("aa", "a/aa.txt", "userA")
-            .delete("a/aa/bbb.txt", "userB")
-            .delete("c", "userC")
-            .write("d", "d.txt", "userD")
-            .commit();
-
-        TreeUtil.logTree(homeDir);
-
-        FSAssert.assertPaths(env,
-                "aaa.txt",
-                "a/aa/aaa.txt",
-                "a/aa.txt",
-                "d.txt");
+        env.newImage().write("a", "a.txt", "userA").delete("a.txt", "userA").commit();
+        assertNotEmptyDir(env.getHomeDir());
+        FSAssert.assertEmpty(env);
     }
 }

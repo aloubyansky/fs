@@ -66,11 +66,11 @@ public class FSReadOnlyImage extends FSSession {
         }
     }
 
-    public boolean exists(String relativePath) {
-        return exists(fsEnv.getFile(relativePath));
+    public boolean contains(String relativePath) {
+        return contains(fsEnv.getFile(relativePath));
     }
 
-    protected boolean exists(File target) {
+    protected boolean contains(File target) {
         return target.exists();
     }
 

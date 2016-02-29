@@ -27,6 +27,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.UUID;
 
+import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.util.IoUtils;
 import org.jboss.provision.util.PropertyUtils;
 
@@ -77,6 +78,11 @@ public class FSUtils {
     }
 
     public static void writeFile(File f, String content) throws IOException {
+        if(!f.getParentFile().exists()) {
+            if(!f.getParentFile().mkdirs()) {
+                throw new IOException(ProvisionErrors.couldNotCreateDir(f.getParentFile()));
+            }
+        }
         FileWriter writer = null;
         try {
             writer = new FileWriter(f);

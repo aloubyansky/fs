@@ -20,7 +20,7 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-package forg.jboss.provision.fs.test.add;
+package forg.jboss.provision.fs.test;
 
 import java.io.File;
 
@@ -29,6 +29,7 @@ import org.jboss.provision.fs.FSEnvironmentConfig;
 import org.jboss.provision.test.util.FSUtils;
 import org.jboss.provision.util.IoUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 
 /**
@@ -57,5 +58,21 @@ public class FSTestBase {
     }
 
     protected void doAfter() throws Exception {
+    }
+
+    protected void assertEmptyDir(File f) {
+        String[] list = f.list();
+        if(list == null) {
+            throw new IllegalArgumentException(f.getAbsolutePath() + " is a file");
+        }
+        Assert.assertEquals(0, list.length);
+    }
+
+    protected void assertNotEmptyDir(File f) {
+        String[] list = f.list();
+        if(list == null) {
+            throw new IllegalArgumentException(f.getAbsolutePath() + " is a file");
+        }
+        Assert.assertTrue(list.length > 0);
     }
 }

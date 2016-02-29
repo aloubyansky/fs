@@ -74,7 +74,7 @@ public class FSImage extends FSReadOnlyImage {
     }
 
     @Override
-    protected boolean exists(File target) {
+    protected boolean contains(File target) {
         final OpDescr opDescr = updates.get(target.getAbsolutePath());
         if(opDescr == null) {
             return target.exists();
@@ -194,7 +194,7 @@ public class FSImage extends FSReadOnlyImage {
         return isDeleted(fsEnv.getFile(relativePath));
     }
 
-    public boolean isDeleted(File target) {
+    boolean isDeleted(File target) {
         final OpDescr opDescr = updates.get(target.getAbsolutePath());
         if(opDescr == null) {
             return false;
