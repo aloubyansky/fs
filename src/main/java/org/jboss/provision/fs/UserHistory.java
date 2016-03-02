@@ -121,12 +121,10 @@ public class UserHistory extends FSSessionHistory {
         return sessionPath;
     }
 
-    private final FSEnvironment env;
     private final String author;
 
     protected UserHistory(FSEnvironment env, String author) {
         super(getUserHistoryDir(env, author));
-        this.env = env;
         this.author = author;
     }
 

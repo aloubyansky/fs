@@ -23,6 +23,8 @@
 package org.jboss.provision.fs;
 
 import java.io.File;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 import org.jboss.provision.ProvisionException;
 
@@ -77,5 +79,67 @@ public class FSEnvironment extends FSSessionHistory {
             return null;
         }
         return loadImage(sessionId);
+    }
+
+    public Iterator<EnvImage> envHistory() throws ProvisionException {
+        return new ImageIterator<EnvImage>(loadLatest()) {
+            @Override
+            protected EnvImage getPrevious(EnvImage image) throws ProvisionException {
+                final String prevId = image.getPreviousRecordId();
+                if(prevId == null) {
+                    return null;
+                }
+                return loadImage(prevId);
+            }
+        };
+    }
+
+    public Iterator<UserImage> userHistory(String username) throws ProvisionException {
+        final UserHistory userHistory = new UserHistory(this, username);
+        return new ImageIterator<UserImage>(userHistory.loadLatest()) {
+            @Override
+            protected UserImage getPrevious(UserImage image) throws ProvisionException {
+                final String prevId = image.getPreviousRecordId();
+                if(prevId == null) {
+                    return null;
+                }
+                return userHistory.loadImage(prevId);
+            }
+        };
+    }
+
+    private abstract class ImageIterator<T> implements Iterator<T> {
+        boolean doNext;
+        private T image;
+        ImageIterator(T first) {
+            this.image = first;
+        }
+        @Override
+        public boolean hasNext() {
+            if(doNext) {
+                doNext();
+            }
+            return image != null;
+        }
+        @Override
+        public T next() {
+            if(hasNext()) {
+                doNext = true;
+                return image;
+            }
+            throw new NoSuchElementException();
+        }
+        private void doNext() {
+            if(!doNext) {
+                return;
+            }
+            try {
+                image = getPrevious(image);
+            } catch(ProvisionException e) {
+                throw new IllegalStateException(e);
+            }
+            doNext = false;
+        }
+        protected abstract T getPrevious(T image) throws ProvisionException;
     }
 }

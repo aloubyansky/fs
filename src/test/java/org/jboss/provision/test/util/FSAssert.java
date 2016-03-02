@@ -26,13 +26,18 @@ import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.jboss.provision.fs.EnvImage;
 import org.jboss.provision.fs.FSEnvironment;
+import org.jboss.provision.fs.UserImage;
 import org.junit.Assert;
 
 /**
@@ -42,6 +47,20 @@ import org.junit.Assert;
 public class FSAssert {
 
     private FSAssert() {
+    }
+
+    public static void assertPaths(UserImage image, String... paths) throws Exception {
+        final Set<String> actual = image.getPaths();
+        if(actual.size() != paths.length || !actual.containsAll(Arrays.asList(paths))) {
+            Assert.fail("Expected " + Arrays.asList(paths) + ", actual " + actual);
+        }
+    }
+
+    public static void assertUsers(EnvImage image, String... users) throws Exception {
+        final List<String> actual = image.getUsers();
+        if(actual.size() != users.length || !actual.containsAll(Arrays.asList(users))) {
+            Assert.fail("Expected " + Arrays.asList(users) + ", actual " + actual);
+        }
     }
 
     public static void assertEmpty(FSEnvironment env) throws Exception {
