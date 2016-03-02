@@ -72,7 +72,7 @@ abstract class FSSession {
         }
     }
 
-    protected void schedulePersistence(FSImage fsImage) throws ProvisionException {
+    protected void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
 
         if (sessionDir.exists()) {
             if (!sessionDir.isDirectory()) {
@@ -94,7 +94,7 @@ abstract class FSSession {
         fsImage.write(sessionId, lastRecordTxt);
     }
 
-    protected void scheduleDelete(FSImage fsImage) throws ProvisionException {
+    protected void scheduleDelete(MutableEnvImage fsImage) throws ProvisionException {
         if (!sessionDir.exists()) {
             return;
         }

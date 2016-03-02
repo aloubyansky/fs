@@ -23,11 +23,7 @@ package org.jboss.provision.fs;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-
 import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
 import org.jboss.provision.util.HashUtils;
@@ -36,13 +32,12 @@ import org.jboss.provision.util.HashUtils;
  *
  * @author Alexey Loubyansky
  */
-public class FSReadOnlyImage extends FSSession {
+public class EnvImage extends FSSession {
 
     protected final FSEnvironment fsEnv;
-    protected Map<String, AuthorImage> authors = Collections.emptyMap();
     protected final PathsOwnership ownership;
 
-    public FSReadOnlyImage(FSEnvironment env, String sessionId) {
+    public EnvImage(FSEnvironment env, String sessionId) {
         super(env, sessionId);
         this.fsEnv = env;
         ownership = PathsOwnership.getInstance(fsEnv.getHistoryDir());
@@ -52,12 +47,12 @@ public class FSReadOnlyImage extends FSSession {
         return fsEnv;
     }
 
-    public AuthorImage getAuthorImage(String author) throws ProvisionException {
-        return AuthorHistory.loadAuthorImage(fsEnv, author, sessionId);
+    public UserImage getUserImage(String user) throws ProvisionException {
+        return UserHistory.loadUserImage(fsEnv, user, sessionId);
     }
 
-    public List<String> getAuthors() throws ProvisionException {
-        return AuthorHistory.listAuthors(fsEnv, sessionId);
+    public List<String> getUsers() throws ProvisionException {
+        return UserHistory.listUsers(fsEnv, sessionId);
     }
 
     public String readContent(String relativePath) throws ProvisionException {
@@ -99,21 +94,7 @@ public class FSReadOnlyImage extends FSSession {
         return HashUtils.hashFile(target);
     }
 
-    protected AuthorImage addAuthor(String author) {
-        AuthorImage session = authors.get(author);
-        if(session != null) {
-            return session;
-        }
-        session = new AuthorHistory(fsEnv, author).newSession(sessionId);
-        switch(authors.size()) {
-            case 0:
-                authors = Collections.singletonMap(author, session);
-                break;
-            case 1:
-                authors = new HashMap<String, AuthorImage>(authors);
-            default:
-                authors.put(author, session);
-        }
-        return session;
+    protected void clear() {
+        ownership.clear();
     }
 }

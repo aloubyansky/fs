@@ -63,15 +63,15 @@ public class FSEnvironment extends FSSessionHistory {
         return new File(homeDir, getFSRelativePath(relativePath));
     }
 
-    public FSImage newImage() {
-        return new FSImage(this);
+    public MutableEnvImage newImage() {
+        return new MutableEnvImage(this);
     }
 
-    public FSReadOnlyImage loadImage(String id) throws ProvisionException {
-        return new FSReadOnlyImage(this, id);
+    public EnvImage loadImage(String id) throws ProvisionException {
+        return new EnvImage(this, id);
     }
 
-    public FSReadOnlyImage loadLatest() throws ProvisionException {
+    public EnvImage loadLatest() throws ProvisionException {
         final String sessionId = getLastSessionId();
         if(sessionId == null) {
             return null;

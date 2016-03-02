@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.jboss.provision.ProvisionException;
-import org.jboss.provision.fs.AuthorImage;
+import org.jboss.provision.fs.UserImage;
 import org.jboss.provision.fs.FSEnvironment;
 import org.junit.Assert;
 import org.junit.Test;
@@ -41,26 +41,27 @@ import org.junit.Test;
  *
  * @author Alexey Loubyansky
  */
-public class GetAuthorImagesTestCase extends FSTestBase {
+public class GetUserImagesTestCase extends FSTestBase {
 
     @Test
     public void testMain() throws Exception {
 
         assertNull(env.loadLatest());
 
-        env.newImage().write("a", "a.txt", "userA").commit();
+        env.newImage().getUserImage("userA").write("a", "a.txt").getEnvImage().commit();
         assertAuthors(env, "userA");
         assertAuthorPaths(env, "userA", "a.txt");
 
-        env.newImage().write("b", "b/b.txt", "userB").commit();
+        env.newImage().getUserImage("userB").write("b", "b/b.txt").getEnvImage().commit();
         assertAuthors(env, "userA", "userB");
         assertAuthorPaths(env, "userA", "a.txt");
         assertAuthorPaths(env, "userB", "b/b.txt");
 
         env.newImage()
-            .write("aa", "b/a.txt", "userA")
-            .delete("b/b.txt", "userB")
-            .write("c", "c.txt", "userC").commit();
+            .getUserImage("userA").write("aa", "b/a.txt").getEnvImage()
+            .getUserImage("userB").delete("b/b.txt").getEnvImage()
+            .getUserImage("userC").write("c", "c.txt").getEnvImage()
+            .commit();
         assertAuthors(env, "userA", "userB", "userC");
         assertAuthorPaths(env, "userA", "a.txt", "b/a.txt");
         assertAuthorPaths(env, "userB");
@@ -69,7 +70,7 @@ public class GetAuthorImagesTestCase extends FSTestBase {
 
     private static void assertAuthorPaths(FSEnvironment env, String author, String... path) throws ProvisionException {
 
-        final AuthorImage authorImage = env.loadLatest().getAuthorImage(author);
+        final UserImage authorImage = env.loadLatest().getUserImage(author);
         if(authorImage == null) {
             Assert.fail("No image for " + author);
         }
@@ -90,7 +91,7 @@ public class GetAuthorImagesTestCase extends FSTestBase {
     }
 
     private static void assertAuthors(FSEnvironment env, String... author) throws ProvisionException {
-        List<String> envAuthors = env.loadLatest().getAuthors();
+        List<String> envAuthors = env.loadLatest().getUsers();
         if(author.length == 0) {
             if(!envAuthors.isEmpty()) {
                 final StringBuilder buf = new StringBuilder("Did not expect authors: ");

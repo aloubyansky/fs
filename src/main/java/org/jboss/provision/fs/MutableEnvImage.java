@@ -25,8 +25,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -39,7 +41,7 @@ import org.jboss.provision.util.HashUtils;
  *
  * @author Alexey Loubyansky
  */
-public class FSImage extends FSReadOnlyImage {
+public class MutableEnvImage extends EnvImage {
 
     static class OpDescr {
         ContentTask contentTask;
@@ -51,14 +53,40 @@ public class FSImage extends FSReadOnlyImage {
         }
     }
 
-    Map<String, OpDescr> updates = new LinkedHashMap<String, OpDescr>();
+    private Map<String, OpDescr> updates = new LinkedHashMap<String, OpDescr>();
+    private Map<String, MutableUserImage> users = Collections.emptyMap();
 
-    FSImage(FSEnvironment fsEnv, String sessionId) {
+    MutableEnvImage(FSEnvironment fsEnv, String sessionId) {
         super(fsEnv, sessionId);
     }
 
-    FSImage(FSEnvironment fsEnv) {
+    MutableEnvImage(FSEnvironment fsEnv) {
         super(fsEnv, UUID.randomUUID().toString());
+    }
+
+    @Override
+    public List<String> getUsers() throws ProvisionException {
+        // TODO this method has to include new users participating in this image too
+        return super.getUsers();
+    }
+
+    @Override
+    public MutableUserImage getUserImage(String user) throws ProvisionException {
+        MutableUserImage image = users.get(user);
+        if(image != null) {
+            return image;
+        }
+        image = new UserHistory(fsEnv, user).newImage(this);
+        switch(users.size()) {
+            case 0:
+                users = Collections.singletonMap(user, image);
+                break;
+            case 1:
+                users = new HashMap<String, MutableUserImage>(users);
+            default:
+                users.put(user, image);
+        }
+        return image;
     }
 
     @Override
@@ -103,11 +131,11 @@ public class FSImage extends FSReadOnlyImage {
         return HashUtils.hashFile(opDescr.contentTask.getTarget());
     }
 
-    FSImage write(ContentWriter contentWriter) throws ProvisionException {
+    protected MutableEnvImage write(ContentWriter contentWriter) throws ProvisionException {
         return write(contentWriter, null, null);
     }
 
-    FSImage write(ContentWriter contentWriter, String relativePath, String author) throws ProvisionException {
+    protected MutableEnvImage write(ContentWriter contentWriter, String relativePath, String user) throws ProvisionException {
         final String targetPath = contentWriter.getTarget().getAbsolutePath();
         final OpDescr descr = updates.get(targetPath);
         if(descr != null) {
@@ -120,24 +148,24 @@ public class FSImage extends FSReadOnlyImage {
         } else {
             updates.put(targetPath, new OpDescr(contentWriter));
         }
-        if(author != null) {
-            ownership.grab(author, relativePath);
-            addAuthor(author).addPath(relativePath);
+        if(user != null) {
+            ownership.grab(user, relativePath);
+            getUserImage(user).addPath(relativePath);
         }
         return this;
     }
 
-    void delete(File target) throws ProvisionException {
+    protected void delete(File target) throws ProvisionException {
         scheduleDelete(null, target, new DeleteTask(target), null);
     }
 
-    public FSImage delete(String relativePath, String author) throws ProvisionException {
+    protected MutableEnvImage delete(String relativePath, String user) throws ProvisionException {
         final File target = fsEnv.getFile(relativePath);
-        scheduleDelete(relativePath, target, new DeleteTask(target, AuthorHistory.getBackupPath(author, this, relativePath), false), author);
+        scheduleDelete(relativePath, target, new DeleteTask(target, UserHistory.getBackupPath(user, this, relativePath), false), user);
         return this;
     }
 
-    protected void scheduleDelete(String relativePath, File target, ContentTask task, String author) throws ProvisionException {
+    protected void scheduleDelete(String relativePath, File target, ContentTask task, String user) throws ProvisionException {
         final OpDescr descr = updates.get(target.getAbsolutePath());
         if (descr != null) {
             if (descr.contentTask == DeleteTask.DELETE_FLAG) {
@@ -149,44 +177,44 @@ public class FSImage extends FSReadOnlyImage {
         }
         if(target.isDirectory()) {
             for(File f : target.listFiles()) {
-                scheduleDelete(relativePath == null ? null : relativePath + '/' + f.getName(), f, DeleteTask.DELETE_FLAG, author);
+                scheduleDelete(relativePath == null ? null : relativePath + '/' + f.getName(), f, DeleteTask.DELETE_FLAG, user);
             }
         } else {
-            if(author != null) {
-                if(!ownership.giveUp(author, relativePath)) {
-                    throw ProvisionErrors.authorDoesNotOwnTargetPath(author, target.getAbsolutePath());
+            if(user != null) {
+                if(!ownership.giveUp(user, relativePath)) {
+                    throw ProvisionErrors.userDoesNotOwnTargetPath(user, target.getAbsolutePath());
                 }
-                addAuthor(author).removePath(relativePath);
+                getUserImage(user).removePath(relativePath);
             }
         }
     }
 
-    void write(String content, File target) throws ProvisionException {
+    protected void write(String content, File target) throws ProvisionException {
         write(new StringContentWriter(content, target), null, null);
     }
 
-    public FSImage write(String content, String relativePath, String author) throws ProvisionException {
-        assert author != null : ProvisionErrors.nullArgument(author);
-        write(new StringContentWriter(content, fsEnv.getFile(relativePath), AuthorHistory.getBackupPath(author, this, relativePath), false), relativePath, author);
+    protected MutableEnvImage write(String content, String relativePath, String user) throws ProvisionException {
+        assert user != null : ProvisionErrors.nullArgument(user);
+        write(new StringContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false), relativePath, user);
         return this;
     }
 
-    void write(File content, File target) throws ProvisionException {
+    protected void write(File content, File target) throws ProvisionException {
         write(new FileContentWriter(content, target), null, null);
     }
 
-    public FSImage write(File content, String relativePath, String author) throws ProvisionException {
-        assert author != null : ProvisionErrors.nullArgument("author");
-        write(new FileContentWriter(content, fsEnv.getFile(relativePath), AuthorHistory.getBackupPath(author, this, relativePath), false), relativePath, author);
+    protected MutableEnvImage write(File content, String relativePath, String user) throws ProvisionException {
+        assert user != null : ProvisionErrors.nullArgument("user");
+        write(new FileContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false), relativePath, user);
         return this;
     }
 
-    public FSImage mkdirs(String relativePath) throws ProvisionException {
-        mkdirs(fsEnv.getFile(relativePath));
+    protected MutableEnvImage mkdirs(String relativePath, String user) throws ProvisionException {
+        write(new MkDirsWriter(fsEnv.getFile(relativePath)), relativePath, user);
         return this;
     }
 
-    void mkdirs(File dir) throws ProvisionException {
+    protected void mkdirs(File dir) throws ProvisionException {
         write(new MkDirsWriter(dir), null, null);
     }
 
@@ -194,7 +222,7 @@ public class FSImage extends FSReadOnlyImage {
         return isDeleted(fsEnv.getFile(relativePath));
     }
 
-    boolean isDeleted(File target) {
+    protected boolean isDeleted(File target) {
         final OpDescr opDescr = updates.get(target.getAbsolutePath());
         if(opDescr == null) {
             return false;
@@ -202,16 +230,16 @@ public class FSImage extends FSReadOnlyImage {
         return opDescr.contentTask.isDelete();
     }
 
-    void schedulePersistence() throws ProvisionException {
+    protected void schedulePersistence() throws ProvisionException {
         schedulePersistence(this);
-        final Set<String> notAffectedAuthors = new HashSet<String>(AuthorHistory.listAuthors(fsEnv));
-        for(AuthorImage author : authors.values()) {
-            notAffectedAuthors.remove(author.getAuthorName());
-            author.schedulePersistence(this);
+        final Set<String> notAffectedUsers = new HashSet<String>(UserHistory.listUsers(fsEnv));
+        for(UserImage user : users.values()) {
+            notAffectedUsers.remove(user.getUsername());
+            user.schedulePersistence(this);
         }
-        if(!notAffectedAuthors.isEmpty()) {
-            for(String author : notAffectedAuthors) {
-                new AuthorHistory(fsEnv, author).newSession(sessionId).scheduleUnaffectedPersistence(this);
+        if(!notAffectedUsers.isEmpty()) {
+            for(String user : notAffectedUsers) {
+                new UserHistory(fsEnv, user).newImage(this).scheduleUnaffectedPersistence(this);
             }
         }
         ownership.schedulePersistence(this);
@@ -267,9 +295,7 @@ public class FSImage extends FSReadOnlyImage {
             }
         }
 
-        updates.clear();
-        authors = Collections.emptyMap();
-        ownership.clear();
+        clear();
     }
 
     public boolean isUntouched() {
@@ -280,5 +306,12 @@ public class FSImage extends FSReadOnlyImage {
         for(OpDescr op : updates.values()) {
             out.println(op.contentTask);
         }
+    }
+
+    @Override
+    protected void clear() {
+        super.clear();
+        users = Collections.emptyMap();
+        updates.clear();
     }
 }

@@ -30,7 +30,7 @@ import static org.junit.Assert.fail;
 
 import java.io.File;
 
-import org.jboss.provision.fs.FSImage;
+import org.jboss.provision.fs.MutableEnvImage;
 import org.jboss.provision.test.util.FSAssert;
 import org.jboss.provision.test.util.FSUtils;
 import org.jboss.provision.util.HashUtils;
@@ -48,10 +48,16 @@ public class BasicImageApiTestCase extends FSTestBase {
     public void testMain() throws Exception {
 
         env.newImage()
-            .write("a", "a/aa/aaa.txt", "userA")
-            .write("a", "aaa.txt", "userA")
-            .write("b", "a/aa/bbb.txt", "userB")
-            .write("c", "c/cc/ccc.txt", "userC")
+            .getUserImage("userA")
+                .write("a", "a/aa/aaa.txt")
+                .write("a", "aaa.txt")
+                .getEnvImage()
+            .getUserImage("userB")
+                .write("b", "a/aa/bbb.txt")
+                .getEnvImage()
+            .getUserImage("userC")
+                .write("c", "c/cc/ccc.txt")
+                .getEnvImage()
             .commit();
 
         FSAssert.assertPaths(env,
@@ -61,12 +67,22 @@ public class BasicImageApiTestCase extends FSTestBase {
                 "c/cc/ccc.txt");
 
         env.newImage()
-            .write("aa", "a/aa/aaa.txt", "userA")
-            .write("aa", "a/aa.txt", "userA")
-            .delete("a/aa/bbb.txt", "userB")
-            .delete("c", "userC")
-            .write("d", "d.txt", "userD")
-            .mkdirs("f/g/h")
+            .getUserImage("userA")
+                .write("aa", "a/aa/aaa.txt")
+                .write("aa", "a/aa.txt")
+                .getEnvImage()
+            .getUserImage("userB")
+                .delete("a/aa/bbb.txt")
+                .getEnvImage()
+            .getUserImage("userC")
+                .delete("c")
+                .getEnvImage()
+            .getUserImage("userD")
+                .write("d", "d.txt")
+                .getEnvImage()
+            .getUserImage("userF")
+                .mkdirs("f/g/h")
+                .getEnvImage()
             .commit();
 
         FSAssert.assertPaths(env,
@@ -80,19 +96,19 @@ public class BasicImageApiTestCase extends FSTestBase {
     @Test
     public void testContains() throws Exception {
 
-        final FSImage fsImage = env.newImage();
+        final MutableEnvImage fsImage = env.newImage();
 
         assertFalse(fsImage.contains("a.txt"));
         FSUtils.writeRandomContent(new File(env.getHomeDir(), "a.txt"));
         assertTrue(fsImage.contains("a.txt"));
 
         assertFalse(fsImage.contains("b.txt"));
-        fsImage.write("b", "b.txt", "userB");
+        fsImage.getUserImage("userB").write("b", "b.txt");
         assertFalse(new File(env.getHomeDir(), "b.txt").exists());
         assertTrue(fsImage.contains("b.txt"));
 
         assertFalse(fsImage.contains("a/b/c"));
-        fsImage.mkdirs("a/b/c");
+        fsImage.getUserImage("userB").mkdirs("a/b/c");
         assertFalse(IoUtils.newFile(env.getHomeDir(), "a", "b", "c").exists());
         assertTrue(fsImage.contains("a/b/c"));
     }
@@ -100,18 +116,18 @@ public class BasicImageApiTestCase extends FSTestBase {
     @Test
     public void testReadContent() throws Exception {
 
-        final FSImage fsImage = env.newImage();
+        final MutableEnvImage fsImage = env.newImage();
 
         assertNull(fsImage.readContent("a/a.txt"));
         FSUtils.writeFile(IoUtils.newFile(env.getHomeDir(), "a", "a.txt"), "a text");
         assertEquals("a text", fsImage.readContent("a/a.txt"));
 
         assertNull(fsImage.readContent("a/aa.txt"));
-        fsImage.write("aa text", "a/aa.txt", "userA");
+        fsImage.getUserImage("userA").write("aa text", "a/aa.txt");
         assertEquals("aa text", fsImage.readContent("a/aa.txt"));
 
         assertNull(fsImage.readContent("a/b/c"));
-        fsImage.mkdirs("a/b/c");
+        fsImage.getUserImage("userA").mkdirs("a/b/c");
         try {
             fsImage.readContent("a/b/c");
             fail("cannot read content of a dir");
@@ -124,21 +140,23 @@ public class BasicImageApiTestCase extends FSTestBase {
     public void testIsDeleted() throws Exception {
 
         env.newImage()
-            .write("abcd", "a/b/c/d.txt", "userA")
-            .write("abc", "a/b/c.txt", "userA")
-            .write("ab", "a/b.txt", "userA")
-            .write("a", "a.txt", "userA")
+            .getUserImage("userA")
+                .write("abcd", "a/b/c/d.txt")
+                .write("abc", "a/b/c.txt")
+                .write("ab", "a/b.txt")
+                .write("a", "a.txt")
+                .getEnvImage()
             .commit();
 
-        final FSImage fsImage = env.newImage();
+        final MutableEnvImage fsImage = env.newImage();
         assertFalse(fsImage.isDeleted("a.txt"));
-        fsImage.delete("a.txt", "userA");
+        fsImage.getUserImage("userA").delete("a.txt");
         assertTrue(fsImage.isDeleted("a.txt"));
         assertFalse(fsImage.isDeleted("aa.txt"));
 
         assertFalse(fsImage.isDeleted("a/b/c.txt"));
         assertFalse(fsImage.isDeleted("a/b/c/d.txt"));
-        fsImage.delete("a/b", "userA");
+        fsImage.getUserImage("userA").delete("a/b");
         assertTrue(fsImage.isDeleted("a/b/c.txt"));
         assertTrue(fsImage.isDeleted("a/b/c/d.txt"));
         assertTrue(fsImage.isDeleted("a/b/c"));
@@ -150,7 +168,7 @@ public class BasicImageApiTestCase extends FSTestBase {
     @Test
     public void testGetHash() throws Exception {
 
-        final FSImage fsImage = env.newImage();
+        final MutableEnvImage fsImage = env.newImage();
 
         assertNull(fsImage.getHash("a/a.txt"));
         final File a = IoUtils.newFile(env.getHomeDir(), "a", "a.txt");
@@ -160,7 +178,7 @@ public class BasicImageApiTestCase extends FSTestBase {
         final File aa = IoUtils.newFile(env.getHomeDir(), "aa", "aa.txt");
         FSUtils.writeFile(aa, "aa text");
         assertNull(fsImage.getHash("a/aa.txt"));
-        fsImage.write(aa, "a/aa.txt", "userA");
+        fsImage.getUserImage("userA").write(aa, "a/aa.txt");
         Assert.assertArrayEquals(HashUtils.hashFile(aa), fsImage.getHash("a/aa.txt"));
     }
 }

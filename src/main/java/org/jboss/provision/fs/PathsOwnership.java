@@ -153,7 +153,7 @@ class PathsOwnership {
         return removed;
     }
 
-    void schedulePersistence(FSImage fsImage) throws ProvisionException {
+    void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
         for(Map.Entry<String, PathOwnership> entry : ownerships.entrySet()) {
             final PathOwnership ownership = entry.getValue();
             if(ownership.isOwned()) {

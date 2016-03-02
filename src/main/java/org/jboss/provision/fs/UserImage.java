@@ -39,29 +39,28 @@ import org.jboss.provision.util.IoUtils;
  *
  * @author Alexey Loubyansky
  */
-public class AuthorImage extends FSSession {
+public class UserImage extends FSSession {
 
     private static final String PATHS = "paths.txt";
 
-    private final AuthorHistory history;
-    private final String author;
+    protected final UserHistory history;
+    protected final String username;
     private Set<String> paths;
 
-    AuthorImage(AuthorHistory history, String author, String sessionId) {
+    UserImage(UserHistory history, String username, String sessionId) {
         super(history, sessionId);
         this.history = history;
-        this.author = author;
+        this.username = username;
     }
 
-    public String getAuthorName() {
-        return author;
+    public String getUsername() {
+        return username;
     }
 
     public Set<String> getPaths() throws ProvisionException {
         if(paths != null) {
             return paths;
         }
-
         paths = new HashSet<String>();
         File pathsFile;
         if(sessionDir.exists()) {
@@ -103,12 +102,12 @@ public class AuthorImage extends FSSession {
         getPaths().remove(relativePath);
     }
 
-    void scheduleUnaffectedPersistence(FSImage fsImage) throws ProvisionException {
+    void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {
         fsImage.write(history.getLastSessionId(), sessionDir);
     }
 
     @Override
-    protected void schedulePersistence(FSImage fsImage) throws ProvisionException {
+    protected void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
         super.schedulePersistence(fsImage);
         fsImage.write(new ContentWriter(new File(sessionDir, PATHS)) {
             @Override

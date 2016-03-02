@@ -20,40 +20,46 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-package forg.jboss.provision.fs.test;
-
-import static org.junit.Assert.fail;
+package org.jboss.provision.fs;
 
 import java.io.File;
 
 import org.jboss.provision.ProvisionException;
-import org.jboss.provision.test.util.FSAssert;
-import org.jboss.provision.test.util.FSUtils;
-import org.junit.Test;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class DeleteNotOwnedPathTestCase extends FSTestBase {
+public class MutableUserImage extends UserImage {
 
-    @Test
-    public void testMain() throws Exception {
+    private final MutableEnvImage fsImage;
 
-        FSAssert.assertEmpty(env);
-        assertEmptyDir(env.getHomeDir());
-        FSUtils.writeFile(new File(env.getHomeDir(), "a.txt"), "original");
-        assertNotEmptyDir(env.getHomeDir());
+    MutableUserImage(UserHistory history, String author, MutableEnvImage fsImage) {
+        super(history, author, fsImage.sessionId);
+        this.fsImage = fsImage;
+    }
 
-        try {
-            env.newImage().getUserImage("userA").delete("a.txt");
-            fail("cannot delete not own path");
-        } catch(ProvisionException e) {
-            // denied
-        }
+    public MutableEnvImage getEnvImage() {
+        return fsImage;
+    }
 
-        env.newImage().getUserImage("userA").write("a", "a.txt").delete("a.txt").getEnvImage().commit();
-        assertNotEmptyDir(env.getHomeDir());
-        FSAssert.assertEmpty(env);
+    public MutableUserImage delete(String relativePath) throws ProvisionException {
+        fsImage.delete(relativePath, username);
+        return this;
+    }
+
+    public MutableUserImage write(String content, String relativePath) throws ProvisionException {
+        fsImage.write(content, relativePath, username);
+        return this;
+    }
+
+    public MutableUserImage write(File content, String relativePath) throws ProvisionException {
+        fsImage.write(content, relativePath, username);
+        return this;
+    }
+
+    public MutableUserImage mkdirs(String relativePath) throws ProvisionException {
+        fsImage.mkdirs(relativePath, username);
+        return this;
     }
 }

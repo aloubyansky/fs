@@ -215,7 +215,7 @@ public class ProvisionErrors {
         return new ProvisionException("Before " + updatedVersion + " of " + unitName + " can be installed, patch " + patchId + " has to be reverted.");
     }
 
-    public static ProvisionException authorDoesNotOwnTargetPath(String author, String path) {
+    public static ProvisionException userDoesNotOwnTargetPath(String author, String path) {
         return new ProvisionException(author + " does not own " + path);
     }
 
