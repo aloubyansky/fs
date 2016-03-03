@@ -43,57 +43,61 @@ import org.jboss.provision.util.IoUtils;
 class PathsOwnership {
 
     private static final String OWNERSHIPS_DIR_NAME = "ownership";
-    private static final String EXTERNAL_AUTHOR_TRUE = "externalAuthor=true";
+    private static final String EXTERNAL_USER_TRUE = "externalUser=true";
 
     static class PathOwnership {
-        boolean externalAuthor;
-        Set<String> authors;
+        boolean externalUser;
+        Set<String> users;
 
-        PathOwnership(boolean externalAuthor) {
-            this.externalAuthor = externalAuthor;
+        PathOwnership(boolean externalUser) {
+            this.externalUser = externalUser;
+            users = Collections.emptySet();
         }
-        PathOwnership(String author) {
-            authors = Collections.singleton(author);
+        PathOwnership(String user) {
+            users = Collections.singleton(user);
         }
-        boolean isExternalAuthor() {
-            return externalAuthor;
+        boolean isExternalUser() {
+            return externalUser;
         }
-        Set<String> getAuthors() {
-            return authors;
+        Set<String> getUsers() {
+            return users;
         }
-        boolean addAuthor(String author) {
-            switch(authors.size()) {
+        boolean addUser(String user) {
+            switch(users.size()) {
                 case 0:
-                    authors = Collections.singleton(author);
+                    users = Collections.singleton(user);
                     return true;
                 case 1:
-                    if(authors.contains(author)) {
+                    if(users.contains(user)) {
                         return false;
                     }
-                    authors = new HashSet<String>(authors);
+                    users = new HashSet<String>(users);
                 default:
-                    return authors.add(author);
+                    return users.add(user);
             }
         }
         /**
          * Returns true if author was actually removed for the path
          */
-        boolean removeAuthor(String author) {
-            switch(authors.size()) {
+        boolean removeUser(String user) {
+            switch(users.size()) {
                 case 0:
                     return false;
                 case 1:
-                    if(!authors.contains(author)) {
+                    if(!users.contains(user)) {
                         return false;
                     }
-                    authors = Collections.emptySet();
+                    users = Collections.emptySet();
                     return true;
                 default:
-                    return authors.remove(author);
+                    return users.remove(user);
             }
         }
         boolean isOwned() {
-            return !authors.isEmpty() || externalAuthor;
+            return !users.isEmpty() || externalUser;
+        }
+        public boolean isOwnedBy(String user) {
+            return users.contains(user);
         }
     }
 
@@ -103,52 +107,64 @@ class PathsOwnership {
 
     final File persistDir;
     private Map<String, PathOwnership> ownerships = Collections.emptyMap();
-    private Map<String, Map<String, Boolean>> authorPaths = Collections.emptyMap();
+    private Map<String, Map<String, Boolean>> userPaths = Collections.emptyMap();
 
     private PathsOwnership(File persistDir) {
         this.persistDir = persistDir;
     }
 
-    void clear() {
-        ownerships = Collections.emptyMap();
-        authorPaths = Collections.emptyMap();
+    boolean isOwnedBy(String path, String user) throws ProvisionException {
+        PathOwnership ownership = ownerships.get(path);
+        if(ownership == null) {
+            ownership = loadOwnership(path);
+            if(ownership == null) {
+                return false;
+            }
+            addOwnership(path, ownership);
+        }
+        return ownership.isOwnedBy(user);
     }
 
-    void grab(String author, String path) throws ProvisionException {
+    void clear() {
+        ownerships = Collections.emptyMap();
+        userPaths = Collections.emptyMap();
+    }
+
+    void grab(String user, String path) throws ProvisionException {
         boolean added = false;
         PathOwnership ownership = ownerships.get(path);
         if(ownership != null) {
-            added = ownership.addAuthor(author);
+            added = ownership.addUser(user);
         } else {
             ownership = loadOwnership(path);
             if (ownership == null) {
-                ownership = new PathOwnership(author);
+                ownership = new PathOwnership(user);
                 added = true;
             } else {
-                added = ownership.addAuthor(author);
+                added = ownership.addUser(user);
             }
             addOwnership(path, ownership);
         }
 
         if(added) {
-            recordPath(author, path, true);
+            recordPath(user, path, true);
         }
     }
 
-    boolean giveUp(String author, String path) throws ProvisionException {
+    boolean giveUp(String user, String path) throws ProvisionException {
         boolean removed = false;
         PathOwnership ownership = ownerships.get(path);
         if (ownership != null) {
-            removed = ownership.removeAuthor(author);
+            removed = ownership.removeUser(user);
         } else {
             ownership = loadOwnership(path);
             if (ownership != null) {
                 addOwnership(path, ownership);
-                removed = ownership.removeAuthor(author);
+                removed = ownership.removeUser(user);
             }
         }
         if(removed) {
-            recordPath(author, path, false);
+            recordPath(user, path, false);
         }
         return removed;
     }
@@ -158,11 +174,11 @@ class PathsOwnership {
             final PathOwnership ownership = entry.getValue();
             if(ownership.isOwned()) {
                 final StringBuilder writer = new StringBuilder();
-                if(ownership.isExternalAuthor()) {
-                    writer.append(EXTERNAL_AUTHOR_TRUE).append(FileUtils.LS);
+                if(ownership.isExternalUser()) {
+                    writer.append(EXTERNAL_USER_TRUE).append(FileUtils.LS);
                 }
-                for(String author : ownership.getAuthors()) {
-                    writer.append(author).append(FileUtils.LS);
+                for(String user : ownership.getUsers()) {
+                    writer.append(user).append(FileUtils.LS);
                 }
                 fsImage.write(writer.toString(), new File(persistDir, FSEnvironment.getFSRelativePath(entry.getKey())));
             } else {
@@ -171,17 +187,17 @@ class PathsOwnership {
         }
     }
 
-    private void recordPath(String author, String path, boolean added) {
-        Map<String, Boolean> paths = authorPaths.get(author);
+    private void recordPath(String user, String path, boolean added) {
+        Map<String, Boolean> paths = userPaths.get(user);
         if(paths == null) {
-            switch(authorPaths.size()) {
+            switch(userPaths.size()) {
                 case 0:
-                    authorPaths = Collections.singletonMap(author, Collections.singletonMap(path, added));
+                    userPaths = Collections.singletonMap(user, Collections.singletonMap(path, added));
                     break;
                 case 1:
-                    authorPaths = new HashMap<String, Map<String, Boolean>>(authorPaths);
+                    userPaths = new HashMap<String, Map<String, Boolean>>(userPaths);
                 default:
-                    authorPaths.put(author, Collections.singletonMap(path, added));
+                    userPaths.put(user, Collections.singletonMap(path, added));
             }
         } else {
             if(paths.size() == 1) {
@@ -191,10 +207,10 @@ class PathsOwnership {
                     paths = new HashMap<String, Boolean>(paths);
                     paths.put(path, true);
                 }
-                if(authorPaths.size() == 1) {
-                    authorPaths = Collections.singletonMap(author, paths);
+                if(userPaths.size() == 1) {
+                    userPaths = Collections.singletonMap(user, paths);
                 } else {
-                    authorPaths.put(author, paths);
+                    userPaths.put(user, paths);
                 }
             } else {
                 paths.put(path, added);
@@ -231,14 +247,14 @@ class PathsOwnership {
                 return null;
             }
             final PathOwnership ownership;
-            if(EXTERNAL_AUTHOR_TRUE.equals(line)) {
+            if(EXTERNAL_USER_TRUE.equals(line)) {
                 ownership = new PathOwnership(true);
             } else {
                 ownership = new PathOwnership(line);
             }
             line = reader.readLine();
             while(line != null) {
-                ownership.addAuthor(line);
+                ownership.addUser(line);
                 line = reader.readLine();
             }
             return ownership;

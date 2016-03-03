@@ -34,14 +34,14 @@ import org.jboss.provision.util.IoUtils;
  *
  * @author Alexey Loubyansky
  */
-class FileContentWriter extends ContentWriter {
+class CopyFileContentWriter extends ContentWriter {
     private final File f;
-    FileContentWriter(File f, File target) {
+    CopyFileContentWriter(File f, File target) {
         super(target);
         assert f != null : ProvisionErrors.nullArgument("file");
         this.f = f;
     }
-    FileContentWriter(File f, File target, File backup, boolean cleanup) {
+    CopyFileContentWriter(File f, File target, File backup, boolean cleanup) {
         super(target, backup, cleanup);
         assert f != null : ProvisionErrors.nullArgument("file");
         this.f = f;

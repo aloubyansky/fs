@@ -22,8 +22,12 @@
 
 package org.jboss.provision.fs;
 
+import java.io.BufferedWriter;
 import java.io.File;
-
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.jboss.provision.ProvisionException;
 
 /**
@@ -33,6 +37,7 @@ import org.jboss.provision.ProvisionException;
 public class MutableUserImage extends UserImage {
 
     private final MutableEnvImage fsImage;
+    private Map<String, Character> journal = Collections.emptyMap();
 
     MutableUserImage(UserHistory history, String author, MutableEnvImage fsImage) {
         super(history, author, fsImage.sessionId);
@@ -44,7 +49,7 @@ public class MutableUserImage extends UserImage {
     }
 
     public MutableUserImage delete(String relativePath) throws ProvisionException {
-        fsImage.delete(relativePath, username);
+        fsImage.delete(relativePath, username, true);
         return this;
     }
 
@@ -54,12 +59,66 @@ public class MutableUserImage extends UserImage {
     }
 
     public MutableUserImage write(File content, String relativePath) throws ProvisionException {
-        fsImage.write(content, relativePath, username);
+        fsImage.write(content, relativePath, username, true);
         return this;
     }
 
     public MutableUserImage mkdirs(String relativePath) throws ProvisionException {
         fsImage.mkdirs(relativePath, username);
         return this;
+    }
+
+    protected void addPath(String relativePath) throws ProvisionException {
+        int i = relativePath.indexOf('/');
+        while(i >= 0) {
+            final String stepPath = relativePath.substring(0, i);
+            if(fsImage.contains(stepPath)) {
+                break;
+            }
+            putInJournal(stepPath, 'c');
+            i = relativePath.indexOf('/', i + 1);
+        }
+        getPaths().add(relativePath);
+        putInJournal(relativePath, 'c');
+    }
+
+    protected void removePath(String relativePath) throws ProvisionException {
+        getPaths().remove(relativePath);
+        putInJournal(relativePath, 'd');
+    }
+
+    protected void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {
+        fsImage.write(history.getLastSessionId(), sessionDir);
+    }
+
+    @Override
+    protected void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
+        super.schedulePersistence(fsImage);
+        fsImage.write(new ContentWriter(new File(sessionDir, TASKS)) {
+            @Override
+            public void write(BufferedWriter writer) throws IOException, ProvisionException {
+                for(Map.Entry<String, Character> entry : journal.entrySet()) {
+                    writer.write(entry.getValue());
+                    writer.write(entry.getKey());
+                    writer.newLine();
+                }
+            }
+        });
+    }
+
+    private void putInJournal(String relativePath, char c) {
+        switch(journal.size()) {
+            case 0:
+                journal = Collections.singletonMap(relativePath, c);
+                break;
+            case 1:
+                if(journal.containsKey(relativePath)) {
+                    journal = Collections.singletonMap(relativePath, c);
+                    break;
+                }
+                journal = new HashMap<String, Character>(journal);
+            default:
+                journal.put(relativePath, c);
+        }
     }
 }

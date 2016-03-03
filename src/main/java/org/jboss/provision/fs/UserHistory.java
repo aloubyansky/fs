@@ -64,6 +64,10 @@ public class UserHistory extends FSSessionHistory {
         return Arrays.asList(usersDir.list());
     }
 
+    static File getBackupPath(UserImage user, String relativePath) {
+        return IoUtils.newFile(user.getSessionDir(), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
+    }
+
     static File getBackupPath(String user, EnvImage fsImage, String relativePath) {
         return IoUtils.newFile(getUserImageDir(fsImage.getFSEnvironment(), user, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
     }
@@ -120,6 +124,22 @@ public class UserHistory extends FSSessionHistory {
         }
         return sessionPath;
     }
+
+    static void scheduleDelete(MutableEnvImage envImage, String imageId) throws ProvisionException {
+        final List<String> allUsers = listUsers(envImage.getFSEnvironment());
+        if(allUsers.isEmpty()) {
+            return;
+        }
+        for(String user : allUsers) {
+            final File imagePath = getUserImageDir(envImage.getFSEnvironment(), user, imageId);
+            if(imagePath.isDirectory()) {
+                loadUserImage(envImage.getFSEnvironment(), user, imageId).scheduleDelete(envImage);
+            } else {
+                envImage.delete(imagePath);
+            }
+        }
+    }
+
 
     private final String author;
 

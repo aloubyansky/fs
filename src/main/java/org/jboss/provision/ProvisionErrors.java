@@ -49,8 +49,8 @@ public class ProvisionErrors {
         return "Not a directory: " + f.getAbsolutePath();
     }
 
-    public static ProvisionException hashCalculationFailed(File f, IOException e) {
-        return new ProvisionException("Failed to calculate hash for " + f.getAbsolutePath(), e);
+    public static ProvisionException hashCalculationFailed(String path, IOException e) {
+        return new ProvisionException("Failed to calculate hash for " + path, e);
     }
 
     public static ProvisionException pathDoesNotExist(File f) {
@@ -225,5 +225,9 @@ public class ProvisionErrors {
 
     public static ProvisionException failedToCopyContent(Throwable e) {
         return new ProvisionException("Failed to copy content", e);
+    }
+
+    public static ProvisionException unexpectedTaskFormat() {
+        return new ProvisionException("Unexpected task format");
     }
 }

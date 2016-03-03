@@ -24,9 +24,11 @@ package org.jboss.provision.fs;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,15 +55,18 @@ public class MutableEnvImage extends EnvImage {
         }
     }
 
+    private final RootPathNode root;
     private Map<String, OpDescr> updates = new LinkedHashMap<String, OpDescr>();
     private Map<String, MutableUserImage> users = Collections.emptyMap();
 
     MutableEnvImage(FSEnvironment fsEnv, String sessionId) {
         super(fsEnv, sessionId);
+        root = new RootPathNode(fsEnv.getHomeDir(), ownership);
     }
 
     MutableEnvImage(FSEnvironment fsEnv) {
         super(fsEnv, UUID.randomUUID().toString());
+        root = new RootPathNode(fsEnv.getHomeDir(), ownership);
     }
 
     @Override
@@ -90,15 +95,37 @@ public class MutableEnvImage extends EnvImage {
     }
 
     @Override
+    public String readContent(String relativePath) throws ProvisionException {
+        final PathNode node = root.get(relativePath);
+        if(node == null) {
+            return super.readContent(relativePath);
+        }
+        return readContent(node.getTask());
+    }
+
+    @Override
     protected String readContent(File target) throws ProvisionException {
         final OpDescr opDescr = updates.get(target.getAbsolutePath());
         if(opDescr == null) {
             return super.readContent(target);
         }
-        if(opDescr.contentTask.isDelete()) {
+        return readContent(opDescr.contentTask);
+    }
+
+    private String readContent(ContentTask contentTask) {
+        if(contentTask.isDelete()) {
             return null;
         }
-        return opDescr.contentTask.getContentString();
+        return contentTask.getContentString();
+    }
+
+    @Override
+    public boolean contains(String relativePath) {
+        final PathNode node = root.get(relativePath);
+        if(node == null) {
+            return super.contains(relativePath);
+        }
+        return !node.isDeleted();
     }
 
     @Override
@@ -111,31 +138,44 @@ public class MutableEnvImage extends EnvImage {
     }
 
     @Override
+    public byte[] getHash(String relativePath) throws ProvisionException {
+        final PathNode node = root.get(relativePath);
+        if(node == null) {
+            return super.getHash(relativePath);
+        }
+        try {
+            return getHash(node.getTask());
+        } catch (IOException e) {
+            throw ProvisionErrors.hashCalculationFailed(relativePath, e);
+        }
+    }
+
+    @Override
     protected byte[] getHash(File target) throws IOException {
         final OpDescr opDescr = updates.get(target.getAbsolutePath());
         if (opDescr == null) {
             return super.getHash(target);
         }
-        if (opDescr.contentTask.isDelete()) {
+        return getHash(opDescr.contentTask);
+    }
+
+    private byte[] getHash(ContentTask contentTask) throws IOException {
+        if (contentTask.isDelete()) {
             return null;
         }
-        if (opDescr.contentTask.getContentFile() != null) {
-            return HashUtils.hashFile(opDescr.contentTask.getContentFile());
+        if (contentTask.getContentFile() != null) {
+            return HashUtils.hashFile(contentTask.getContentFile());
         }
-        if (opDescr.contentTask.getContentString() != null) {
-            return HashUtils.hashBytes(opDescr.contentTask.getContentString().getBytes());
+        if (contentTask.getContentString() != null) {
+            return HashUtils.hashBytes(contentTask.getContentString().getBytes());
         }
-        if (!opDescr.contentTask.getTarget().exists()) {
+        if (!contentTask.getTarget().exists()) {
             return null;
         }
-        return HashUtils.hashFile(opDescr.contentTask.getTarget());
+        return HashUtils.hashFile(contentTask.getTarget());
     }
 
     protected MutableEnvImage write(ContentWriter contentWriter) throws ProvisionException {
-        return write(contentWriter, null, null);
-    }
-
-    protected MutableEnvImage write(ContentWriter contentWriter, String relativePath, String user) throws ProvisionException {
         final String targetPath = contentWriter.getTarget().getAbsolutePath();
         final OpDescr descr = updates.get(targetPath);
         if(descr != null) {
@@ -148,24 +188,20 @@ public class MutableEnvImage extends EnvImage {
         } else {
             updates.put(targetPath, new OpDescr(contentWriter));
         }
-        if(user != null) {
-            ownership.grab(user, relativePath);
-            getUserImage(user).addPath(relativePath);
-        }
+        return this;
+    }
+
+    protected MutableEnvImage write(ContentWriter contentWriter, String relativePath, String user) throws ProvisionException {
+        getUserImage(user).addPath(relativePath);
+        root.write(user, relativePath, contentWriter);
         return this;
     }
 
     protected void delete(File target) throws ProvisionException {
-        scheduleDelete(null, target, new DeleteTask(target), null);
+        scheduleDelete(null, target, new DeleteTask(target));
     }
 
-    protected MutableEnvImage delete(String relativePath, String user) throws ProvisionException {
-        final File target = fsEnv.getFile(relativePath);
-        scheduleDelete(relativePath, target, new DeleteTask(target, UserHistory.getBackupPath(user, this, relativePath), false), user);
-        return this;
-    }
-
-    protected void scheduleDelete(String relativePath, File target, ContentTask task, String user) throws ProvisionException {
+    protected void scheduleDelete(String relativePath, File target, ContentTask task) throws ProvisionException {
         final OpDescr descr = updates.get(target.getAbsolutePath());
         if (descr != null) {
             if (descr.contentTask == DeleteTask.DELETE_FLAG) {
@@ -177,20 +213,39 @@ public class MutableEnvImage extends EnvImage {
         }
         if(target.isDirectory()) {
             for(File f : target.listFiles()) {
-                scheduleDelete(relativePath == null ? null : relativePath + '/' + f.getName(), f, DeleteTask.DELETE_FLAG, user);
-            }
-        } else {
-            if(user != null) {
-                if(!ownership.giveUp(user, relativePath)) {
-                    throw ProvisionErrors.userDoesNotOwnTargetPath(user, target.getAbsolutePath());
-                }
-                getUserImage(user).removePath(relativePath);
+                scheduleDelete(relativePath == null ? null : relativePath + '/' + f.getName(), f, DeleteTask.DELETE_FLAG);
             }
         }
     }
 
+    protected MutableEnvImage delete(String relativePath, String user, boolean backupForHistory) throws ProvisionException {
+        final File target = fsEnv.getFile(relativePath);
+        final DeleteTask task = backupForHistory ?
+                new DeleteTask(target, UserHistory.getBackupPath(user, this, relativePath), false) :
+                    new DeleteTask(target);
+        if(target.isDirectory()) {
+            root.deleteDir(relativePath, task);
+            scheduleDelete(target, relativePath, user);
+        } else {
+            root.delete(user, relativePath, task);
+            getUserImage(user).removePath(relativePath);
+        }
+        return this;
+    }
+
+    protected void scheduleDelete(File target, String relativePath, String user) throws ProvisionException {
+        if(target.isDirectory()) {
+            for(File child : target.listFiles()) {
+                scheduleDelete(child, relativePath + '/' + child.getName(), user);
+            }
+        } else {
+            getUserImage(user).removePath(relativePath);
+            ownership.giveUp(user, relativePath);
+        }
+    }
+
     protected void write(String content, File target) throws ProvisionException {
-        write(new StringContentWriter(content, target), null, null);
+        write(new StringContentWriter(content, target));
     }
 
     protected MutableEnvImage write(String content, String relativePath, String user) throws ProvisionException {
@@ -200,12 +255,16 @@ public class MutableEnvImage extends EnvImage {
     }
 
     protected void write(File content, File target) throws ProvisionException {
-        write(new FileContentWriter(content, target), null, null);
+        write(new CopyFileContentWriter(content, target), null, null);
     }
 
-    protected MutableEnvImage write(File content, String relativePath, String user) throws ProvisionException {
+    protected MutableEnvImage write(File content, String relativePath, String user, boolean backupForHistory) throws ProvisionException {
         assert user != null : ProvisionErrors.nullArgument("user");
-        write(new FileContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false), relativePath, user);
+        if(backupForHistory) {
+            write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false), relativePath, user);
+        } else {
+            write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user);
+        }
         return this;
     }
 
@@ -215,11 +274,11 @@ public class MutableEnvImage extends EnvImage {
     }
 
     protected void mkdirs(File dir) throws ProvisionException {
-        write(new MkDirsWriter(dir), null, null);
+        write(new MkDirsWriter(dir));
     }
 
     public boolean isDeleted(String relativePath) {
-        return isDeleted(fsEnv.getFile(relativePath));
+        return root.isDeleted(relativePath);
     }
 
     protected boolean isDeleted(File target) {
@@ -245,23 +304,42 @@ public class MutableEnvImage extends EnvImage {
         ownership.schedulePersistence(this);
     }
 
+    protected void scheduleDelete() throws ProvisionException {
+        UserHistory.scheduleDelete(this, sessionId);
+        ownership.schedulePersistence(this);
+        super.scheduleDelete(this);
+    }
+
     public void commit() throws ProvisionException {
-
         schedulePersistence();
+        executeUpdates();
+    }
 
-        final OpDescr[] ops = new OpDescr[updates.size()];
+    protected void executeUpdates() throws ProvisionException {
+
+        //root.logTree();
+
+        final List<ContentTask> ops = new ArrayList<ContentTask>(updates.size());
         int i = 0;
 
         // backup
         try {
+            final Iterator<ContentTask> tasks = root.getTasks();
+            while(tasks.hasNext()) {
+                ContentTask next = tasks.next();
+                ++i;
+                ops.add(next);
+                next.backup();
+            }
             for (OpDescr op : updates.values()) {
-                ops[i++] = op;
+                ++i;
+                ops.add(op.contentTask);
                 op.contentTask.backup();
             }
         } catch (ProvisionException | RuntimeException | Error e) {
             while(i > 0) {
                 try {
-                    ops[--i].contentTask.cleanup();
+                    ops.get(--i).cleanup();
                 } catch (ProvisionException e1) {
                     e1.printStackTrace();
                 }
@@ -272,13 +350,13 @@ public class MutableEnvImage extends EnvImage {
         // execute
         try {
             i = 0;
-            while(i < ops.length) {
-                ops[i++].contentTask.execute();
+            while(i < ops.size()) {
+                ops.get(i++).execute();
             }
         } catch (ProvisionException | RuntimeException | Error e) {
             while (i > 0) {
                 try {
-                    ops[--i].contentTask.revert();
+                    ops.get(--i).revert();
                 } catch(Throwable t) {
                     t.printStackTrace();
                 }
@@ -289,7 +367,7 @@ public class MutableEnvImage extends EnvImage {
         // cleanup
         while(i > 0) {
             try {
-                ops[--i].contentTask.cleanup();
+                ops.get(--i).cleanup();
             } catch (ProvisionException | RuntimeException | Error e) {
                 e.printStackTrace();
             }

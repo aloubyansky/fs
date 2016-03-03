@@ -84,7 +84,7 @@ public class EnvImage extends FSSession {
         try {
             return getHash(target);
         } catch (IOException e) {
-            throw ProvisionErrors.hashCalculationFailed(target, e);
+            throw ProvisionErrors.hashCalculationFailed(relativePath, e);
         }
     }
 

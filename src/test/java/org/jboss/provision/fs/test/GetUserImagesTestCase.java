@@ -20,40 +20,41 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-package forg.jboss.provision.fs.test;
+package org.jboss.provision.fs.test;
 
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertNull;
 
-import java.io.File;
-
-import org.jboss.provision.ProvisionException;
 import org.jboss.provision.test.util.FSAssert;
-import org.jboss.provision.test.util.FSUtils;
 import org.junit.Test;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class DeleteNotOwnedPathTestCase extends FSTestBase {
+public class GetUserImagesTestCase extends FSTestBase {
 
     @Test
     public void testMain() throws Exception {
 
-        FSAssert.assertEmpty(env);
-        assertEmptyDir(env.getHomeDir());
-        FSUtils.writeFile(new File(env.getHomeDir(), "a.txt"), "original");
-        assertNotEmptyDir(env.getHomeDir());
+        assertNull(env.getImage());
 
-        try {
-            env.newImage().getUserImage("userA").delete("a.txt");
-            fail("cannot delete not own path");
-        } catch(ProvisionException e) {
-            // denied
-        }
+        env.newImage().getUserImage("userA").write("a", "a.txt").getEnvImage().commit();
+        FSAssert.assertUsers(env, "userA");
+        FSAssert.assertPaths("userA", env, "a.txt");
 
-        env.newImage().getUserImage("userA").write("a", "a.txt").delete("a.txt").getEnvImage().commit();
-        assertNotEmptyDir(env.getHomeDir());
-        FSAssert.assertEmpty(env);
+        env.newImage().getUserImage("userB").write("b", "b/b.txt").getEnvImage().commit();
+        FSAssert.assertUsers(env, "userA", "userB");
+        FSAssert.assertPaths("userA", env, "a.txt");
+        FSAssert.assertPaths("userB", env, "b/b.txt");
+
+        env.newImage()
+            .getUserImage("userA").write("aa", "b/a.txt").getEnvImage()
+            .getUserImage("userB").delete("b/b.txt").getEnvImage()
+            .getUserImage("userC").write("c", "c.txt").getEnvImage()
+            .commit();
+        FSAssert.assertUsers(env, "userA", "userB", "userC");
+        FSAssert.assertPaths("userA", env, "a.txt", "b/a.txt");
+        FSAssert.assertPaths("userB", env);
+        FSAssert.assertPaths("userC", env, "c.txt");
     }
 }

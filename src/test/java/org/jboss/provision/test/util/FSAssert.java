@@ -24,7 +24,6 @@ package org.jboss.provision.test.util;
 
 import java.io.File;
 import java.io.FilenameFilter;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,11 +48,34 @@ public class FSAssert {
     private FSAssert() {
     }
 
+    public static void assertPaths(String user, FSEnvironment env, String... paths) throws Exception {
+        final EnvImage envImage = env.getImage();
+        if(envImage == null) {
+            Assert.fail("Environment is empty");
+        }
+        final UserImage userImage = envImage.getUserImage(user);
+        if(userImage == null) {
+            Assert.fail("User " + user + " is not known.");
+        }
+        assertPaths(userImage, paths);
+    }
+
     public static void assertPaths(UserImage image, String... paths) throws Exception {
         final Set<String> actual = image.getPaths();
         if(actual.size() != paths.length || !actual.containsAll(Arrays.asList(paths))) {
             Assert.fail("Expected " + Arrays.asList(paths) + ", actual " + actual);
         }
+    }
+
+    public static void assertUsers(FSEnvironment env, String... users) throws Exception {
+        final EnvImage image = env.getImage();
+        if(image == null) {
+            if(users.length > 0) {
+                Assert.fail("Environment is empty");
+            }
+            return;
+        }
+        assertUsers(image, users);
     }
 
     public static void assertUsers(EnvImage image, String... users) throws Exception {
@@ -63,7 +85,7 @@ public class FSAssert {
         }
     }
 
-    public static void assertEmpty(FSEnvironment env) throws Exception {
+    public static void assertNoContent(FSEnvironment env) throws Exception {
         assertPaths(env);
     }
 
@@ -164,10 +186,10 @@ public class FSAssert {
                 leaf = child;
             }
         }
-        void logTree() throws IOException {
+        void logTree() {
             buildTree(this, System.out, new LinkedList<Boolean>());
         }
-        private static void buildTree(Leaf f, PrintStream out, LinkedList<Boolean> depth) throws IOException {
+        private static void buildTree(Leaf f, PrintStream out, LinkedList<Boolean> depth) {
             if(!depth.isEmpty()) {
                 for(int i = 0; i < depth.size() - 1; ++i) {
                     if(depth.get(i)) {

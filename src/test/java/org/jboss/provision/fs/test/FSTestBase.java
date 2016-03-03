@@ -20,7 +20,7 @@
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
 
-package forg.jboss.provision.fs.test;
+package org.jboss.provision.fs.test;
 
 import java.io.File;
 

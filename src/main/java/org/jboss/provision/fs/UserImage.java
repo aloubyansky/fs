@@ -22,6 +22,7 @@
 
 package org.jboss.provision.fs;
 
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -41,6 +42,7 @@ import org.jboss.provision.util.IoUtils;
  */
 public class UserImage extends FSSession {
 
+    static final String TASKS = "tasks.txt";
     private static final String PATHS = "paths.txt";
 
     protected final UserHistory history;
@@ -51,6 +53,10 @@ public class UserImage extends FSSession {
         super(history, sessionId);
         this.history = history;
         this.username = username;
+    }
+
+    UserHistory getUserHistory() {
+        return history;
     }
 
     public String getUsername() {
@@ -94,18 +100,6 @@ public class UserImage extends FSSession {
         return paths;
     }
 
-    void addPath(String relativePath) throws ProvisionException {
-        getPaths().add(relativePath);
-    }
-
-    void removePath(String relativePath) throws ProvisionException {
-        getPaths().remove(relativePath);
-    }
-
-    void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {
-        fsImage.write(history.getLastSessionId(), sessionDir);
-    }
-
     @Override
     protected void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
         super.schedulePersistence(fsImage);
@@ -119,4 +113,41 @@ public class UserImage extends FSSession {
             }
         });
     }
+
+    @Override
+    protected void scheduleDelete(MutableEnvImage fsImage) throws ProvisionException {
+
+        final File tasksFile = new File(sessionDir, TASKS);
+        if(!tasksFile.exists()) {
+            return;
+        }
+
+        BufferedReader reader = null;
+        try {
+            reader = new BufferedReader(new FileReader(tasksFile));
+            String line = reader.readLine();
+            while (line != null) {
+                final char c = line.charAt(0);
+                final String relativePath = line.substring(1);
+                if (relativePath == null) {
+                    throw ProvisionErrors.unexpectedTaskFormat();
+                }
+                final File backupPath = UserHistory.getBackupPath(this, relativePath);
+                if(backupPath.exists()) {
+                    fsImage.write(backupPath, relativePath, username, false);
+                } else if (c == 'c') {
+                    fsImage.delete(relativePath, username, false);
+                }
+                line = reader.readLine();
+            }
+        } catch (IOException e) {
+
+        } finally {
+            IoUtils.safeClose(reader);
+        }
+
+
+        super.scheduleDelete(fsImage);
+    }
+
 }

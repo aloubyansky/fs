@@ -26,6 +26,7 @@ import java.io.File;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
+import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
 
 /**
@@ -69,27 +70,27 @@ public class FSEnvironment extends FSSessionHistory {
         return new MutableEnvImage(this);
     }
 
-    public EnvImage loadImage(String id) throws ProvisionException {
+    protected EnvImage getImage(String id) throws ProvisionException {
         return new EnvImage(this, id);
     }
 
-    public EnvImage loadLatest() throws ProvisionException {
+    public EnvImage getImage() throws ProvisionException {
         final String sessionId = getLastSessionId();
         if(sessionId == null) {
             return null;
         }
-        return loadImage(sessionId);
+        return getImage(sessionId);
     }
 
     public Iterator<EnvImage> envHistory() throws ProvisionException {
-        return new ImageIterator<EnvImage>(loadLatest()) {
+        return new ImageIterator<EnvImage>(getImage()) {
             @Override
             protected EnvImage getPrevious(EnvImage image) throws ProvisionException {
                 final String prevId = image.getPreviousRecordId();
                 if(prevId == null) {
                     return null;
                 }
-                return loadImage(prevId);
+                return getImage(prevId);
             }
         };
     }
@@ -106,6 +107,16 @@ public class FSEnvironment extends FSSessionHistory {
                 return userHistory.loadImage(prevId);
             }
         };
+    }
+
+    public void undoLastCommit() throws ProvisionException {
+        final String lastImageId = getLastSessionId();
+        if(lastImageId == null) {
+            throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
+        }
+        final MutableEnvImage image = new MutableEnvImage(this, lastImageId);
+        image.scheduleDelete();
+        image.executeUpdates();
     }
 
     private abstract class ImageIterator<T> implements Iterator<T> {

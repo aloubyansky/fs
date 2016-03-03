@@ -44,7 +44,7 @@ abstract class FSSession {
         this.sessionDir = new File(history.getHistoryDir(), sessionId);
     }
 
-    File getSessionDir() throws ProvisionException {
+    File getSessionDir() {
         return sessionDir;
     }
 

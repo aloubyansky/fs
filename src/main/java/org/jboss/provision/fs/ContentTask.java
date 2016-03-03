@@ -35,7 +35,7 @@ import org.jboss.provision.util.IoUtils;
 public abstract class ContentTask {
 
     protected final File target;
-    private File backup;
+    protected File backup;
     private final boolean cleanup;
 
     ContentTask(File target) {
@@ -70,7 +70,6 @@ public abstract class ContentTask {
             return;
         }
         if (backup.exists()) {
-            backup = null;
             throw ProvisionErrors.pathAlreadyExists(backup);
         }
         try {
