@@ -83,4 +83,16 @@ public class UndoLastCommitTestCase extends FSTestBase {
             // expected
         }
     }
+
+    @Test
+    public void testMkDirs() throws Exception {
+
+        env.newImage().getUserImage("userA").mkdirs("a/aa/aaa").getEnvImage().commit();
+        FSAssert.assertUsers(env, "userA");
+        FSAssert.assertPaths("userA", env);
+
+        env.undoLastCommit();
+        FSAssert.assertUsers(env);
+        FSAssert.assertNoContent(env);
+    }
 }

@@ -117,7 +117,7 @@ public class RootPathNode extends PathNode {
         }
     }
 
-    void write(String user, String relativePath, ContentWriter task) throws ProvisionException {
+    void write(String user, String relativePath, ContentWriter task, boolean dir) throws ProvisionException {
         final String[] segments = relativePath.split("/");
         PathNode parent = this;
         int i = 0;
@@ -137,7 +137,9 @@ public class RootPathNode extends PathNode {
             target = newChild(parent, segments[i]);
         }
         setTask(target, task);
-        ownership.grab(user, relativePath);
+        if(!dir) {
+            ownership.grab(user, relativePath);
+        }
     }
 
     private static PathNode newChild(PathNode parent, String name) {

@@ -137,6 +137,8 @@ public class UserImage extends FSSession {
                     fsImage.write(backupPath, relativePath, username, false);
                 } else if (c == 'c') {
                     fsImage.delete(relativePath, username, false);
+                } else {
+                    System.out.println("UserImage.scheduleDelete no backup for " + relativePath);
                 }
                 line = reader.readLine();
             }

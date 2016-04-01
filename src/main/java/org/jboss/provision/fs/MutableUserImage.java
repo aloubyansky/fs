@@ -68,7 +68,7 @@ public class MutableUserImage extends UserImage {
         return this;
     }
 
-    protected void addPath(String relativePath) throws ProvisionException {
+    protected void addPath(String relativePath, boolean dir) throws ProvisionException {
         int i = relativePath.indexOf('/');
         while(i >= 0) {
             final String stepPath = relativePath.substring(0, i);
@@ -78,7 +78,9 @@ public class MutableUserImage extends UserImage {
             putInJournal(stepPath, 'c');
             i = relativePath.indexOf('/', i + 1);
         }
-        getPaths().add(relativePath);
+        if(!dir) {
+            getPaths().add(relativePath);
+        }
         putInJournal(relativePath, 'c');
     }
 
