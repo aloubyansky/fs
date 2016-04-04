@@ -88,15 +88,46 @@ public class DirectoriesTestCase extends FSTestBase {
         FSAssert.assertPaths("userB", env);
         FSAssert.assertPaths(env, "a/b");
 
-        TreeUtil.logTree(env.getHomeDir());
-System.out.println("UNDO");
         env.undoLastCommit();
-
-        TreeUtil.logTree(env.getHomeDir());
 
         FSAssert.assertUsers(env, "userA", "userB");
         FSAssert.assertPaths("userA", env);
         FSAssert.assertPaths("userB", env);
         FSAssert.assertPaths(env, "a/b/c");
+
+        env.undoLastCommit();
+
+        FSAssert.assertUsers(env, "userA", "userB");
+        FSAssert.assertPaths("userA", env);
+        FSAssert.assertPaths("userB", env);
+        FSAssert.assertPaths(env, "a/b");
+
+        env.undoLastCommit();
+
+        FSAssert.assertUsers(env, "userA", "userB");
+        FSAssert.assertPaths("userA", env);
+        FSAssert.assertPaths("userB", env);
+        FSAssert.assertPaths(env, "a/b/c/d");
+
+        env.undoLastCommit();
+
+        FSAssert.assertNoContent(env);
+    }
+
+    @Test
+    public void testUndoFileWrite() throws Exception {
+
+        env.newImage()
+            .getUserImage("userA")
+                .write("test", "a/b/c/d.txt")
+                .getEnvImage()
+            .commit();
+
+        FSAssert.assertUsers(env, "userA");
+        FSAssert.assertPaths("userA", env, "a/b/c/d.txt");
+        FSAssert.assertPaths(env, "a/b/c/d.txt");
+
+        env.undoLastCommit();
+        TreeUtil.logTree(env.getHomeDir());
     }
 }

@@ -114,6 +114,7 @@ public class UserImage extends FSSession {
         });
     }
 
+    @SuppressWarnings("resource")
     @Override
     protected void scheduleDelete(MutableEnvImage fsImage) throws ProvisionException {
 
@@ -127,23 +128,24 @@ public class UserImage extends FSSession {
             reader = new BufferedReader(new FileReader(tasksFile));
             String line = reader.readLine();
             while (line != null) {
-                final char c = line.charAt(0);
-                final String relativePath = line.substring(1);
+                final char action = line.charAt(0);
+                final char contentType = line.charAt(1);
+                final String relativePath = line.substring(2);
                 if (relativePath == null) {
                     throw ProvisionErrors.unexpectedTaskFormat();
                 }
                 final File backupPath = UserHistory.getBackupPath(this, relativePath);
                 if(backupPath.exists()) {
                     fsImage.write(backupPath, relativePath, username, false);
-                } else if (c == 'c') {
+                } else if (action == 'c') {
                     fsImage.delete(relativePath, username, false);
-                } else {
-                    System.out.println("UserImage.scheduleDelete no backup for " + relativePath);
+                } else if(contentType == 'd') {
+                    fsImage.mkdirs(relativePath, username);
                 }
                 line = reader.readLine();
             }
         } catch (IOException e) {
-
+            e.printStackTrace();
         } finally {
             IoUtils.safeClose(reader);
         }

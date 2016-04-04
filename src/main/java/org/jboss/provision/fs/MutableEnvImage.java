@@ -230,9 +230,10 @@ public class MutableEnvImage extends EnvImage {
         if(target.isDirectory()) {
             root.deleteDir(relativePath, task);
             giveUp(target, relativePath, user);
+            getUserImage(user).removePath(relativePath, true);
         } else {
             root.delete(user, relativePath, task);
-            getUserImage(user).removePath(relativePath);
+            getUserImage(user).removePath(relativePath, false);
         }
         return this;
     }
@@ -243,7 +244,7 @@ public class MutableEnvImage extends EnvImage {
                 giveUp(child, relativePath + '/' + child.getName(), user);
             }
         } else {
-            getUserImage(user).removePath(relativePath);
+            getUserImage(user).removePath(relativePath, false);
             ownership.giveUp(user, relativePath);
         }
     }
@@ -261,7 +262,15 @@ public class MutableEnvImage extends EnvImage {
     protected MutableEnvImage write(File content, String relativePath, String user, boolean backupForHistory) throws ProvisionException {
         assert user != null : ProvisionErrors.nullArgument("user");
         if(backupForHistory) {
-            write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false), relativePath, user, content.isDirectory());
+            if(content.isDirectory()) {
+                write(new CopyDirContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false),
+                        relativePath, user, content.isDirectory());
+            } else {
+                write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false),
+                        relativePath, user, content.isDirectory());
+            }
+        } else if(content.isDirectory()){
+            write(new CopyDirContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user, content.isDirectory());
         } else {
             write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user, content.isDirectory());
         }
@@ -317,7 +326,7 @@ public class MutableEnvImage extends EnvImage {
 
     protected void executeUpdates() throws ProvisionException {
 
-        root.logTree();
+        //root.logTree();
 
         final List<ContentTask> ops = new ArrayList<ContentTask>(updates.size());
         int i = 0;

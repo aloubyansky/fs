@@ -37,7 +37,7 @@ import org.jboss.provision.ProvisionException;
 public class MutableUserImage extends UserImage {
 
     private final MutableEnvImage fsImage;
-    private Map<String, Character> journal = Collections.emptyMap();
+    private Map<String, String> journal = Collections.emptyMap();
 
     MutableUserImage(UserHistory history, String author, MutableEnvImage fsImage) {
         super(history, author, fsImage.sessionId);
@@ -69,24 +69,30 @@ public class MutableUserImage extends UserImage {
     }
 
     protected void addPath(String relativePath, boolean dir) throws ProvisionException {
+        boolean journaled = false;
         int i = relativePath.indexOf('/');
         while(i >= 0) {
             final String stepPath = relativePath.substring(0, i);
-            if(fsImage.contains(stepPath)) {
+            if(!fsImage.contains(stepPath)) {
+                putInJournal(stepPath, 'c', true);
+                journaled = true;
                 break;
             }
-            putInJournal(stepPath, 'c');
             i = relativePath.indexOf('/', i + 1);
         }
         if(!dir) {
             getPaths().add(relativePath);
         }
-        putInJournal(relativePath, 'c');
+        if(!journaled) {
+            putInJournal(relativePath, 'c', dir);
+        }
     }
 
-    protected void removePath(String relativePath) throws ProvisionException {
-        getPaths().remove(relativePath);
-        putInJournal(relativePath, 'd');
+    protected void removePath(String relativePath, boolean dir) throws ProvisionException {
+        if(!dir) {
+            getPaths().remove(relativePath);
+        }
+        putInJournal(relativePath, 'd', dir);
     }
 
     protected void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {
@@ -99,7 +105,7 @@ public class MutableUserImage extends UserImage {
         fsImage.write(new ContentWriter(new File(sessionDir, TASKS)) {
             @Override
             public void write(BufferedWriter writer) throws IOException, ProvisionException {
-                for(Map.Entry<String, Character> entry : journal.entrySet()) {
+                for(Map.Entry<String, String> entry : journal.entrySet()) {
                     writer.write(entry.getValue());
                     writer.write(entry.getKey());
                     writer.newLine();
@@ -108,19 +114,21 @@ public class MutableUserImage extends UserImage {
         });
     }
 
-    private void putInJournal(String relativePath, char c) {
+    private void putInJournal(String relativePath, char c, boolean dir) {
+        final StringBuilder buf = new StringBuilder(2);
+        buf.append(c).append(dir ? 'd' : 'f');
         switch(journal.size()) {
             case 0:
-                journal = Collections.singletonMap(relativePath, c);
+                journal = Collections.singletonMap(relativePath, buf.toString());
                 break;
             case 1:
                 if(journal.containsKey(relativePath)) {
-                    journal = Collections.singletonMap(relativePath, c);
+                    journal = Collections.singletonMap(relativePath, buf.toString());
                     break;
                 }
-                journal = new HashMap<String, Character>(journal);
+                journal = new HashMap<String, String>(journal);
             default:
-                journal.put(relativePath, c);
+                journal.put(relativePath, buf.toString());
         }
     }
 }

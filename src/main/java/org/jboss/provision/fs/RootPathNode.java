@@ -135,6 +135,8 @@ public class RootPathNode extends PathNode {
         PathNode target = parent.children.get(segments[i]);
         if(target == null) {
             target = newChild(parent, segments[i]);
+        } else if(dir && target.isDeleted()) {
+            deleteChildren(target);
         }
         setTask(target, task);
         if(!dir) {
