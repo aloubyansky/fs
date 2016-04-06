@@ -38,7 +38,7 @@ import org.junit.Test;
 public class DeleteNotOwnedPathTestCase extends FSTestBase {
 
     @Test
-    public void testMain() throws Exception {
+    public void testPreexistingExternal() throws Exception {
 
         FSAssert.assertNoContent(env);
         assertEmptyDir(env.getHomeDir());
@@ -49,11 +49,28 @@ public class DeleteNotOwnedPathTestCase extends FSTestBase {
             env.newImage().getUserImage("userA").delete("a.txt");
             fail("cannot delete not own path");
         } catch(ProvisionException e) {
-            // denied
         }
 
         env.newImage().getUserImage("userA").write("a", "a.txt").delete("a.txt").getEnvImage().commit();
         assertNotEmptyDir(env.getHomeDir());
         FSAssert.assertNoContent(env);
+    }
+
+    @Test
+    public void testCreatedByOtherUser() throws Exception {
+
+        try {
+            env.newImage()
+                .getUserImage("userA")
+                    .write("a", "test/test.txt")
+                    .getEnvImage()
+                .getUserImage("userB")
+                    .delete("test/test.txt")
+                    .getEnvImage()
+                .commit();
+        } catch(ProvisionException e) {
+        }
+        FSAssert.assertNoContent(env);
+        assertEmptyDir(env.getHomeDir());
     }
 }

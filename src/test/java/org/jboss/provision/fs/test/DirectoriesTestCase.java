@@ -22,8 +22,10 @@
 
 package org.jboss.provision.fs.test;
 
+import org.jboss.provision.ProvisionException;
 import org.jboss.provision.test.util.FSAssert;
 import org.jboss.provision.test.util.TreeUtil;
+import org.junit.Assert;
 import org.junit.Test;
 
 /**
@@ -129,5 +131,38 @@ public class DirectoriesTestCase extends FSTestBase {
 
         env.undoLastCommit();
         TreeUtil.logTree(env.getHomeDir());
+    }
+
+    @Test
+    public void testGiveUpDir() throws Exception {
+
+        env.newImage()
+            .getUserImage("userA")
+                .write("a", "common/a/a.txt")
+                .getEnvImage()
+            .getUserImage("userB")
+                .write("b", "common/b/b.txt")
+                .getEnvImage()
+            .commit();
+
+        FSAssert.assertUsers(env, "userA", "userB");
+        FSAssert.assertPaths("userA", env, "common/a/a.txt");
+        FSAssert.assertPaths("userB", env, "common/b/b.txt");
+        FSAssert.assertPaths(env, "common/a/a.txt", "common/b/b.txt");
+
+        try {
+            env.newImage().getUserImage("userA").delete("common").getEnvImage().commit();
+            Assert.fail("can't remove not own content");
+        } catch(ProvisionException e) {
+        }
+
+        FSAssert.assertUsers(env, "userA", "userB");
+        FSAssert.assertPaths("userA", env, "common/a/a.txt");
+        FSAssert.assertPaths("userB", env, "common/b/b.txt");
+        FSAssert.assertPaths(env, "common/a/a.txt", "common/b/b.txt");
+
+        env.undoLastCommit();
+
+        FSAssert.assertNoContent(env);
     }
 }

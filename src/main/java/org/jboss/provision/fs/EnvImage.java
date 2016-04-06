@@ -56,7 +56,7 @@ public class EnvImage extends FSSession {
         return UserHistory.listUsers(fsEnv, sessionId);
     }
 
-    public String readContent(String relativePath) throws ProvisionException {
+    protected String readContent(String relativePath) throws ProvisionException {
         return readContent(fsEnv.getFile(relativePath));
     }
 

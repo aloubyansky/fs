@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
 
 /**
@@ -93,10 +92,11 @@ public class RootPathNode extends PathNode {
         }
     }
 
-    void delete(String user, String relativePath, DeleteTask task) throws ProvisionException {
-        if(!ownership.giveUp(user, relativePath)) {
-            throw ProvisionErrors.userDoesNotOwnTargetPath(user, relativePath);
+    boolean delete(String user, String relativePath, DeleteTask task) throws ProvisionException {
+        if(ownership.giveUp(user, relativePath)) {
+            return false; // still owned
         }
+
         final String[] segments = relativePath.split("/");
         PathNode target = this;
         for(String name : segments) {
@@ -105,16 +105,17 @@ public class RootPathNode extends PathNode {
                 child = newChild(target, name);
             } else {
                 if(child.isDeleted()) {
-                    return;
+                    return true;
                 }
             }
             target = child;
         }
         setTask(target, task);
-        if(!target.children.isEmpty()) {
+        if(!target.children.isEmpty()) { // it shouldn't be called to dirs actually
             unsetChildTasks(target);
             target.children = Collections.emptyMap();
         }
+        return true;
     }
 
     void write(String user, String relativePath, ContentWriter task, boolean dir) throws ProvisionException {

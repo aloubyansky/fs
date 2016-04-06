@@ -152,6 +152,10 @@ class PathsOwnership {
     }
 
     boolean giveUp(String user, String path) throws ProvisionException {
+        return giveUp(user, path, false);
+    }
+
+    boolean giveUp(String user, String path, boolean safe) throws ProvisionException {
         boolean removed = false;
         PathOwnership ownership = ownerships.get(path);
         if (ownership != null) {
@@ -165,8 +169,12 @@ class PathsOwnership {
         }
         if(removed) {
             recordPath(user, path, false);
+            return ownership.isOwned();
         }
-        return removed;
+        if(safe) {
+            return false;
+        }
+        throw ProvisionErrors.userDoesNotOwnTargetPath(user, path);
     }
 
     void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {

@@ -36,6 +36,7 @@ import java.util.Set;
 
 import org.jboss.provision.fs.EnvImage;
 import org.jboss.provision.fs.FSEnvironment;
+import org.jboss.provision.fs.FileUtils;
 import org.jboss.provision.fs.UserImage;
 import org.junit.Assert;
 
@@ -87,6 +88,10 @@ public class FSAssert {
 
     public static void assertNoContent(FSEnvironment env) throws Exception {
         assertPaths(env);
+    }
+
+    public static void assertContent(File f, String content) throws Exception {
+        Assert.assertEquals(content, FileUtils.readFile(f));
     }
 
     public static void assertPaths(FSEnvironment env, String... path) throws Exception {
@@ -186,6 +191,7 @@ public class FSAssert {
                 leaf = child;
             }
         }
+        @SuppressWarnings("unused")
         void logTree() {
             buildTree(this, System.out, new LinkedList<Boolean>());
         }

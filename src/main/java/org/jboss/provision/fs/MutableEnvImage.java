@@ -192,7 +192,7 @@ public class MutableEnvImage extends EnvImage {
     }
 
     protected MutableEnvImage write(ContentWriter contentWriter, String relativePath, String user, boolean dir) throws ProvisionException {
-        getUserImage(user).addPath(relativePath, dir);
+        getUserImage(user).addPath(contentWriter.getTarget(), relativePath, dir, dir ? false : ownership.isOwnedBy(relativePath, user));
         root.write(user, relativePath, contentWriter, dir);
         return this;
     }
@@ -220,33 +220,59 @@ public class MutableEnvImage extends EnvImage {
 
     protected MutableEnvImage delete(String relativePath, String user, boolean backupForHistory) throws ProvisionException {
         final File target = fsEnv.getFile(relativePath);
-        if(!target.exists()) {
+        if(!contains(relativePath)) {
             giveUp(target, relativePath, user);
             return this;
         }
-        final DeleteTask task = backupForHistory ?
-                new DeleteTask(target, UserHistory.getBackupPath(user, this, relativePath), false) :
-                    new DeleteTask(target);
-        if(target.isDirectory()) {
-            root.deleteDir(relativePath, task);
-            giveUp(target, relativePath, user);
-            getUserImage(user).removePath(relativePath, true);
-        } else {
-            root.delete(user, relativePath, task);
-            getUserImage(user).removePath(relativePath, false);
-        }
+        scheduleDelete(target, relativePath, user, backupForHistory);
         return this;
     }
 
     protected void giveUp(File target, String relativePath, String user) throws ProvisionException {
         if(target.isDirectory()) {
             for(File child : target.listFiles()) {
-                giveUp(child, relativePath + '/' + child.getName(), user);
+                final String childPath = relativePath + '/' + child.getName();
+                if(contains(childPath)) {
+                    giveUp(child, childPath, user);
+                }
             }
         } else {
             getUserImage(user).removePath(relativePath, false);
-            ownership.giveUp(user, relativePath);
+            ownership.giveUp(user, relativePath, !target.exists());
         }
+    }
+
+    protected boolean scheduleDelete(File target, String relativePath, String user, boolean backupForHistory) throws ProvisionException {
+        if(target.isDirectory()) {
+            boolean childrenDeleted = true;
+            for(File child : target.listFiles()) {
+                final String childPath = relativePath + '/' + child.getName();
+                if(contains(childPath)) {
+                    childrenDeleted = childrenDeleted && scheduleDelete(child, childPath, user, backupForHistory);
+                }
+            }
+            if(childrenDeleted) {
+                final DeleteTask task = backupForHistory ?
+                        new DeleteTask(target, UserHistory.getBackupPath(user, this, relativePath), false) :
+                            new DeleteTask(target);
+                root.deleteDir(relativePath, task);
+                getUserImage(user).removePath(relativePath, true);
+            }
+            return childrenDeleted;
+        } else {
+            getUserImage(user).removePath(relativePath, false);
+            final DeleteTask task = backupForHistory ?
+                    new DeleteTask(target, UserHistory.getBackupPath(user, this, relativePath), false) :
+                        new DeleteTask(target);
+            return root.delete(user, relativePath, task);
+        }
+    }
+
+    protected void grab(String relativePath, String user) throws ProvisionException {
+        if(!contains(relativePath)) {
+            return;
+        }
+        ownership.grab(user, relativePath);
     }
 
     protected void write(String content, File target) throws ProvisionException {

@@ -68,7 +68,7 @@ public class MutableUserImage extends UserImage {
         return this;
     }
 
-    protected void addPath(String relativePath, boolean dir) throws ProvisionException {
+    protected void addPath(File target, String relativePath, boolean dir, boolean own) throws ProvisionException {
         boolean journaled = false;
         int i = relativePath.indexOf('/');
         while(i >= 0) {
@@ -84,7 +84,17 @@ public class MutableUserImage extends UserImage {
             getPaths().add(relativePath);
         }
         if(!journaled) {
-            putInJournal(relativePath, 'c', dir);
+            final char action;
+            if(target.exists()) {
+                if(own) {
+                    action = UPDATE;
+                } else {
+                    action = GRAB;
+                }
+            } else {
+                action = CREATE;
+            }
+            putInJournal(relativePath, action, dir);
         }
     }
 
@@ -92,7 +102,7 @@ public class MutableUserImage extends UserImage {
         if(!dir) {
             getPaths().remove(relativePath);
         }
-        putInJournal(relativePath, 'd', dir);
+        putInJournal(relativePath, DELETE, dir);
     }
 
     protected void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {

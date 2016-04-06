@@ -45,6 +45,11 @@ public class UserImage extends FSSession {
     static final String TASKS = "tasks.txt";
     private static final String PATHS = "paths.txt";
 
+    static final char CREATE = 'c';
+    static final char DELETE = 'd';
+    static final char GRAB = 'g';
+    static final char UPDATE = 'u';
+
     protected final UserHistory history;
     protected final String username;
     private Set<String> paths;
@@ -137,8 +142,13 @@ public class UserImage extends FSSession {
                 final File backupPath = UserHistory.getBackupPath(this, relativePath);
                 if(backupPath.exists()) {
                     fsImage.write(backupPath, relativePath, username, false);
-                } else if (action == 'c') {
+                } else if (action == CREATE) {
                     fsImage.delete(relativePath, username, false);
+                } else if (action == GRAB) {
+                    fsImage.giveUp(fsImage.fsEnv.getFile(relativePath), relativePath, username);
+                } else if(action == UPDATE) {
+                } else if(contentType == 'f') {
+                    fsImage.grab(relativePath, username);
                 } else if(contentType == 'd') {
                     fsImage.mkdirs(relativePath, username);
                 }
@@ -149,7 +159,6 @@ public class UserImage extends FSSession {
         } finally {
             IoUtils.safeClose(reader);
         }
-
 
         super.scheduleDelete(fsImage);
     }
