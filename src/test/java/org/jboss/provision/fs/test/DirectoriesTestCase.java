@@ -24,7 +24,6 @@ package org.jboss.provision.fs.test;
 
 import org.jboss.provision.ProvisionException;
 import org.jboss.provision.test.util.FSAssert;
-import org.jboss.provision.test.util.TreeUtil;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -130,7 +129,6 @@ public class DirectoriesTestCase extends FSTestBase {
         FSAssert.assertPaths(env, "a/b/c/d.txt");
 
         env.undoLastCommit();
-        TreeUtil.logTree(env.getHomeDir());
     }
 
     @Test

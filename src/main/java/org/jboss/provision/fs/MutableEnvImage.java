@@ -289,16 +289,29 @@ public class MutableEnvImage extends EnvImage {
         assert user != null : ProvisionErrors.nullArgument("user");
         if(backupForHistory) {
             if(content.isDirectory()) {
-                write(new CopyDirContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false),
-                        relativePath, user, content.isDirectory());
+                final File[] files = content.listFiles();
+                if(files.length == 0) {
+                    mkdirs(relativePath, user);
+                } else {
+                    for (File f : files) {
+                        write(f, relativePath + '/' + f.getName(), user, backupForHistory);
+                    }
+                }
             } else {
                 write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath), UserHistory.getBackupPath(user, this, relativePath), false),
                         relativePath, user, content.isDirectory());
             }
-        } else if(content.isDirectory()){
-            write(new CopyDirContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user, content.isDirectory());
+        } else if(content.isDirectory()) {
+            final File[] files = content.listFiles();
+            if(files.length == 0) {
+                mkdirs(relativePath, user);
+            } else {
+                for (File f : files) {
+                    write(f, relativePath + '/' + f.getName(), user, backupForHistory);
+                }
+            }
         } else {
-            write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user, content.isDirectory());
+            write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user, false);
         }
         return this;
     }
