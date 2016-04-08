@@ -106,8 +106,8 @@ public class UserHistory extends FSSessionHistory {
         return users;
     }
 
-    private static File getLastUpdateDir(File authorHistoryDir, String sessionId) throws ProvisionException {
-        File sessionPath = new File(authorHistoryDir, sessionId);
+    private static File getLastUpdateDir(File userHistoryDir, String sessionId) throws ProvisionException {
+        File sessionPath = new File(userHistoryDir, sessionId);
         if(!sessionPath.exists()) {
             return null;
         }
@@ -117,7 +117,7 @@ public class UserHistory extends FSSessionHistory {
             } catch (IOException e) {
                 throw ProvisionErrors.readError(sessionPath, e);
             }
-            sessionPath = new File(authorHistoryDir, sessionId);
+            sessionPath = new File(userHistoryDir, sessionId);
             if(!sessionPath.exists()) {
                 throw ProvisionErrors.pathDoesNotExist(sessionPath);
             }
@@ -125,7 +125,7 @@ public class UserHistory extends FSSessionHistory {
         return sessionPath;
     }
 
-    static void scheduleDelete(MutableEnvImage envImage, String imageId) throws ProvisionException {
+    static void undo(MutableEnvImage envImage, String imageId) throws ProvisionException {
         final List<String> allUsers = listUsers(envImage.getFSEnvironment());
         if(allUsers.isEmpty()) {
             return;
@@ -133,11 +133,38 @@ public class UserHistory extends FSSessionHistory {
         for(String user : allUsers) {
             final File imagePath = getUserImageDir(envImage.getFSEnvironment(), user, imageId);
             if(imagePath.isDirectory()) {
-                loadUserImage(envImage.getFSEnvironment(), user, imageId).scheduleDelete(envImage);
+                loadUserImage(envImage.getFSEnvironment(), user, imageId).undo(envImage);
             } else {
                 envImage.delete(imagePath);
             }
         }
+    }
+
+    static void deleteUser(MutableEnvImage envImage, String user) throws ProvisionException {
+        final FSEnvironment env = envImage.getFSEnvironment();
+        final UserHistory userHistory = new UserHistory(env, user);
+        if(!userHistory.getHistoryDir().exists()) {
+            throw ProvisionErrors.unknownUnit(user);
+        }
+        UserImage userImage = userHistory.loadLatest();
+        if(userImage == null) {
+            throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
+        }
+
+        for(String path : userImage.getPaths()) {
+            envImage.delete(path, user, false);
+        }
+
+        env.getImage(userImage.sessionId).scheduleDelete(envImage);
+        String prevId = userImage.getPreviousRecordId();
+        while(prevId != null) {
+            userImage = userHistory.loadImage(prevId);
+            final EnvImage prevEnvImage = env.getImage(prevId);
+            prevId = userImage.getPreviousRecordId();
+            prevEnvImage.scheduleDelete(envImage);
+        }
+
+        envImage.delete(userHistory.getHistoryDir());
     }
 
 

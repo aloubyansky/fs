@@ -39,6 +39,13 @@ public class FSEnvironment extends FSSessionHistory {
         return new FSEnvironment(config);
     }
 
+    public static String getFSRelativePath(String relativePath) {
+        if(relativePath == null) {
+            return null;
+        }
+        return File.separatorChar == '\\' ? relativePath.replace('/', '\\') : relativePath;
+    }
+
     private final File homeDir;
 
     private FSEnvironment(FSEnvironmentConfig config) {
@@ -53,13 +60,6 @@ public class FSEnvironment extends FSSessionHistory {
     @Override
     File getHistoryDir() {
         return historyDir;
-    }
-
-    public static String getFSRelativePath(String relativePath) {
-        if(relativePath == null) {
-            return null;
-        }
-        return File.separatorChar == '\\' ? relativePath.replace('/', '\\') : relativePath;
     }
 
     public File getFile(String relativePath) {
@@ -115,7 +115,14 @@ public class FSEnvironment extends FSSessionHistory {
             throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
         }
         final MutableEnvImage image = new MutableEnvImage(this, lastImageId);
-        image.scheduleDelete();
+        image.undo();
+        image.executeUpdates();
+    }
+
+    public void deleteUser(String user) throws ProvisionException {
+        final MutableEnvImage image = newImage();
+        UserHistory.deleteUser(image, user);
+        image.ownership.schedulePersistence(image);
         image.executeUpdates();
     }
 

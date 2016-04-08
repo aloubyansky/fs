@@ -120,8 +120,7 @@ public class UserImage extends FSSession {
     }
 
     @SuppressWarnings("resource")
-    @Override
-    protected void scheduleDelete(MutableEnvImage fsImage) throws ProvisionException {
+    protected void undo(MutableEnvImage fsImage) throws ProvisionException {
 
         final File tasksFile = new File(sessionDir, TASKS);
         if(!tasksFile.exists()) {
@@ -145,7 +144,7 @@ public class UserImage extends FSSession {
                 } else if (action == CREATE) {
                     fsImage.delete(relativePath, username, false);
                 } else if (action == GRAB) {
-                    fsImage.giveUp(fsImage.fsEnv.getFile(relativePath), relativePath, username);
+                    fsImage.giveUp(fsImage.fsEnv.getFile(relativePath), relativePath, username, false);
                 } else if(action == UPDATE) {
                 } else if(contentType == 'f') {
                     fsImage.grab(relativePath, username);
@@ -160,7 +159,7 @@ public class UserImage extends FSSession {
             IoUtils.safeClose(reader);
         }
 
-        super.scheduleDelete(fsImage);
+        scheduleDelete(fsImage);
     }
 
 }

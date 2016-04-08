@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
 import org.jboss.provision.ProvisionException;
 
 /**
@@ -54,7 +55,7 @@ public class MutableUserImage extends UserImage {
     }
 
     public MutableUserImage write(String content, String relativePath) throws ProvisionException {
-        fsImage.write(content, relativePath, username);
+        fsImage.write(content, relativePath, this);
         return this;
     }
 
@@ -103,6 +104,10 @@ public class MutableUserImage extends UserImage {
             getPaths().remove(relativePath);
         }
         putInJournal(relativePath, DELETE, dir);
+    }
+
+    protected File getBackupPath(String relativePath) {
+        return UserHistory.getBackupPath(username, fsImage, relativePath);
     }
 
     protected void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {
