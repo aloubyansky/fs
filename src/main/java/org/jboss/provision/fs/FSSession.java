@@ -115,7 +115,7 @@ abstract class FSSession {
             }
         }
         if (nextSessionId != null) {
-            final File prevSessionTxt = IoUtils.newFile(sessionDir, nextSessionId, FSSessionHistory.PREV_SESSION_TXT);
+            final File prevSessionTxt = IoUtils.newFile(history.getHistoryDir(), nextSessionId, FSSessionHistory.PREV_SESSION_TXT);
             if (prevSessionId != null) {
                 if (prevSessionTxt.exists()) {
                     fsImage.write(prevSessionId, prevSessionTxt);

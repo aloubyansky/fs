@@ -95,6 +95,10 @@ public class EnvImage extends FSSession {
         return HashUtils.hashFile(target);
     }
 
+    protected boolean isOnlyOwner(String user, String relativePath) throws ProvisionException {
+        return ownership.isOnlyOwner(user, relativePath);
+    }
+
     protected void clear() {
         ownership.clear();
     }

@@ -28,7 +28,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
@@ -155,9 +157,11 @@ public class UserHistory extends FSSessionHistory {
             envImage.delete(path, user, false);
         }
 
+        deleteCommitRecords(envImage, userImage.sessionId, user);
         env.getImage(userImage.sessionId).scheduleDelete(envImage);
         String prevId = userImage.getPreviousRecordId();
         while(prevId != null) {
+            deleteCommitRecords(envImage, prevId, user);
             userImage = userHistory.loadImage(prevId);
             final EnvImage prevEnvImage = env.getImage(prevId);
             prevId = userImage.getPreviousRecordId();
@@ -167,6 +171,38 @@ public class UserHistory extends FSSessionHistory {
         envImage.delete(userHistory.getHistoryDir());
     }
 
+    static void deleteCommitRecords(MutableEnvImage envImage, String id, String user) throws ProvisionException {
+
+        final File usersDir = getUsersDir(envImage.getFSEnvironment());
+        if(!usersDir.exists()) {
+            throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
+        }
+        final String[] users = usersDir.list();
+        if(users.length == 0) {
+            throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
+        }
+        Set<String> userSet = Collections.emptySet();
+        for(String u : users) {
+            final File record = IoUtils.newFile(usersDir, u, id);
+            if(!record.exists()) {
+                continue;
+            }
+            if(record.isDirectory()) {
+                if(!userSet.isEmpty()) {
+                    userSet.add(u);
+                } else if(!u.equals(user)) {
+                    userSet = new HashSet<String>();
+                    userSet.add(user);
+                    userSet.add(u);
+                }
+            } else {
+                envImage.delete(record);
+            }
+        }
+        if(!userSet.isEmpty()) {
+            throw ProvisionErrors.instructionTargetsOtherThanRequestedUnits(user, new HashSet<String>(Arrays.asList(users)));
+        }
+    }
 
     private final String author;
 

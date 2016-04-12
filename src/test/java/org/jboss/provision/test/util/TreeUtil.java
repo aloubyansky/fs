@@ -22,12 +22,18 @@
 
 package org.jboss.provision.test.util;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 
 import org.jboss.provision.util.HashUtils;
+import org.jboss.provision.util.IoUtils;
 
 /**
  *
@@ -35,11 +41,84 @@ import org.jboss.provision.util.HashUtils;
  */
 public class TreeUtil {
 
-    public static void logTree(File f) throws IOException {
-        buildTree(f, System.out, new LinkedList<Boolean>());
+    public static interface Formatter {
+        void append(PrintStream out, File f) throws IOException;
     }
 
-    private static void buildTree(File f, PrintStream out, LinkedList<Boolean> depth) throws IOException {
+    public static class DefaultFormatter implements Formatter {
+        @Override
+        public void append(PrintStream out, File f) throws IOException {
+            if(f.isDirectory()) {
+                appendDir(out, f);
+            } else {
+                appendFile(out, f);
+            }
+        }
+        protected void appendDir(PrintStream out, File dir) throws IOException {
+            out.print(dir.getName());
+        }
+        protected void appendFile(PrintStream out, File f) throws IOException {
+            out.print(f.getName());
+            out.print(" (hash=");
+            out.print(HashUtils.bytesToHexString(HashUtils.hashFile(f)));
+            out.print(')');
+        }
+    }
+
+    private static class Formatters {
+        private Map<String, Formatter> formatters = Collections.emptyMap();
+        public void addFormatter(String path, Formatter formatter) {
+            switch(formatters.size()) {
+                case 0:
+                    formatters = Collections.singletonMap('/' + path, formatter);
+                    break;
+                case 1:
+                    formatters = new HashMap<String, Formatter>(formatters);
+                default:
+                    formatters.put('/' + path, formatter);
+            }
+        }
+        Formatter getFormatter(String path, Formatter defFormatter) {
+            return formatters.getOrDefault(path, defFormatter);
+        }
+    }
+
+    private static final Formatter FORMATTER = new DefaultFormatter();
+    private static final Formatters FORMATTERS = new Formatters();
+
+    static {
+        FORMATTERS.addFormatter(".fs/ownership", new DefaultFormatter() {
+            @Override
+            protected void appendFile(PrintStream out, File f) throws IOException {
+                out.print(f.getName());
+                out.print(" (");
+                BufferedReader reader = null;
+                try {
+                    reader = new BufferedReader(new FileReader(f));
+                    String line = reader.readLine();
+                    if (line != null) {
+                        out.print(line);
+                        line = reader.readLine();
+                        while (line != null) {
+                            out.print(',');
+                            out.print(line);
+                            line = reader.readLine();
+                        }
+                    }
+                } finally {
+                    IoUtils.safeClose(reader);
+                }
+                out.print(')');
+            }
+        });
+    }
+
+
+    public static void logTree(File f) throws IOException {
+        buildTree(f, System.out, new LinkedList<Boolean>(), "", FORMATTER);
+    }
+
+    private static void buildTree(File f, PrintStream out, LinkedList<Boolean> depth, String relativePath, Formatter defFormatter) throws IOException {
 
         if(!depth.isEmpty()) {
             for(int i = 0; i < depth.size() - 1; ++i) {
@@ -55,7 +134,8 @@ public class TreeUtil {
                 out.print("`--");
             }
         }
-        out.print(f.getName());
+        final Formatter formatter = FORMATTERS.getFormatter(relativePath, defFormatter);
+        formatter.append(out, f);
         if(f.isDirectory()) {
             out.println();
             final File[] files = f.listFiles();
@@ -63,13 +143,11 @@ public class TreeUtil {
             while(i < files.length) {
                 final File c = files[i++];
                 depth.addLast(i != files.length);
-                buildTree(c, out, depth);
+                buildTree(c, out, depth, relativePath + '/' + c.getName(), formatter);
                 depth.removeLast();
             }
         } else {
-            out.print(" (hash=");
-            out.print(HashUtils.bytesToHexString(HashUtils.hashFile(f)));
-            out.println(')');
+            out.println();
         }
     }
 }

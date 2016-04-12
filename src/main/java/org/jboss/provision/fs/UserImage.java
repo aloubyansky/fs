@@ -144,7 +144,11 @@ public class UserImage extends FSSession {
                 } else if (action == CREATE) {
                     fsImage.delete(relativePath, username, false);
                 } else if (action == GRAB) {
-                    fsImage.giveUp(fsImage.fsEnv.getFile(relativePath), relativePath, username, false);
+                    if(fsImage.isOnlyOwner(username, relativePath)) {
+                        fsImage.delete(relativePath, username, false);
+                    } else {
+                        fsImage.giveUp(fsImage.fsEnv.getFile(relativePath), relativePath, username, false);
+                    }
                 } else if(action == UPDATE) {
                 } else if(contentType == 'f') {
                     fsImage.grab(relativePath, username);

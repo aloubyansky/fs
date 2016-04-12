@@ -33,7 +33,7 @@ import org.junit.Test;
 public class DeleteUserTestCase extends FSTestBase {
 
     @Test
-    public void testMain() throws Exception {
+    public void testSingleUserCommits() throws Exception {
 
         env.newImage()
             .getUserImage("userA")
@@ -48,8 +48,84 @@ public class DeleteUserTestCase extends FSTestBase {
         FSAssert.assertUsers(env, "userA");
         FSAssert.assertPaths("userA", env, "aaa.txt", "a/aa/aaa.txt");
 
-        TreeUtil.logTree(env.getHomeDir());
+        env.newImage()
+            .getUserImage("userA")
+                .write("a2", "a/aa/aaa.txt")
+                .write("a", "a2.txt")
+                .getEnvImage()
+            .commit();
+
+        FSAssert.assertPaths(env,
+                "aaa.txt",
+                "a2.txt",
+                "a/aa/aaa.txt");
+        FSAssert.assertUsers(env, "userA");
+        FSAssert.assertPaths("userA", env, "aaa.txt", "a2.txt", "a/aa/aaa.txt");
+
         env.deleteUser("userA");
+    }
+
+    @Test
+    public void testSingleUserCommitsMixedContent() throws Exception {
+
+        env.newImage()
+            .getUserImage("userA")
+                .write("a", "a/aa/aaa.txt")
+                .write("a", "shared.txt")
+                .getEnvImage()
+            .commit();
+
+        env.newImage()
+            .getUserImage("userB")
+                .write("b", "a/aa/bbb.txt")
+                .write("b", "shared.txt")
+                .getEnvImage()
+            .commit();
+
+        env.newImage()
+            .getUserImage("userA")
+                .write("a2", "a.txt")
+                .write("a2", "shared.txt")
+                .getEnvImage()
+            .commit();
+
+        env.newImage()
+            .getUserImage("userB")
+                .write("b", "b/bb.txt")
+                .getEnvImage()
+            .commit();
+
+        FSAssert.assertPaths(env,
+                "a.txt",
+                "shared.txt",
+                "b/bb.txt",
+                "a/aa/aaa.txt",
+                "a/aa/bbb.txt");
+        FSAssert.assertUsers(env, "userA", "userB");
+        FSAssert.assertPaths("userA", env, "shared.txt", "a/aa/aaa.txt", "a.txt");
+        FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt", "b/bb.txt");
+
+        env.deleteUser("userA");
+
+        FSAssert.assertPaths(env,
+                "shared.txt",
+                "b/bb.txt",
+                "a/aa/bbb.txt");
+        FSAssert.assertUsers(env, "userB");
+        FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt", "b/bb.txt");
+
+        env.undoLastCommit();
+
+        FSAssert.assertPaths(env,
+                "shared.txt",
+                "a/aa/bbb.txt");
+        FSAssert.assertUsers(env, "userB");
+        FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt");
+
+        System.out.println("undo");
+        env.undoLastCommit();
         TreeUtil.logTree(env.getHomeDir());
+
+        FSAssert.assertNoContent(env);
     }
 }

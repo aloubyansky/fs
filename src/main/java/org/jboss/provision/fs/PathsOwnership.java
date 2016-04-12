@@ -99,6 +99,9 @@ class PathsOwnership {
         public boolean isOwnedBy(String user) {
             return users.contains(user);
         }
+        boolean isOnlyOwner(String user) {
+            return users.size() == 1 && users.contains(user);
+        }
     }
 
     static PathsOwnership getInstance(File historyDir) {
@@ -123,6 +126,18 @@ class PathsOwnership {
             addOwnership(path, ownership);
         }
         return ownership.isOwnedBy(user);
+    }
+
+    boolean isOnlyOwner(String user, String path) throws ProvisionException {
+        PathOwnership ownership = ownerships.get(path);
+        if(ownership == null) {
+            ownership = loadOwnership(path);
+            if(ownership == null) {
+                return false;
+            }
+            addOwnership(path, ownership);
+        }
+        return ownership.isOnlyOwner(user);
     }
 
     void clear() {
