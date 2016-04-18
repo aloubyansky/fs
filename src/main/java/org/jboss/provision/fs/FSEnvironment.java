@@ -122,7 +122,7 @@ public class FSEnvironment extends FSSessionHistory {
     public void deleteUser(String user) throws ProvisionException {
         final MutableEnvImage image = newImage();
         UserHistory.deleteUser(image, user);
-        image.ownership.schedulePersistence(image);
+        image.root.schedulePersistence(image);
         image.executeUpdates();
     }
 

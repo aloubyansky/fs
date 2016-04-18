@@ -71,7 +71,12 @@ public class UserHistory extends FSSessionHistory {
     }
 
     static File getBackupPath(String user, EnvImage fsImage, String relativePath) {
-        return IoUtils.newFile(getUserImageDir(fsImage.getFSEnvironment(), user, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
+        //return IoUtils.newFile(getUserImageDir(fsImage.getFSEnvironment(), user, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
+        return getBackupPath(fsImage.getFSEnvironment(), fsImage.sessionId, relativePath);
+    }
+
+    static File getBackupPath(FSEnvironment env, String sessionId, String relativePath) {
+        return IoUtils.newFile(env.getHistoryDir(), sessionId, BACKUP, FSEnvironment.getFSRelativePath(relativePath));
     }
 
     static UserImage loadUserImage(FSEnvironment env, String user, String imageId) throws ProvisionException {

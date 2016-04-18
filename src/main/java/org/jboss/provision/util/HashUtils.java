@@ -55,6 +55,10 @@ public class HashUtils {
         }
     }
 
+    public static String hashToHexString(String str) throws IOException {
+        return bytesToHexString(hashBytes(str.getBytes()));
+    }
+
     public static byte[] hashFile(File file) throws IOException {
         synchronized (DIGEST) {
             DIGEST.reset();

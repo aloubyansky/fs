@@ -123,6 +123,7 @@ public class DeleteUserTestCase extends FSTestBase {
         FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt");
 
         System.out.println("undo");
+        TreeUtil.logTree(env.getHomeDir());
         env.undoLastCommit();
         TreeUtil.logTree(env.getHomeDir());
 

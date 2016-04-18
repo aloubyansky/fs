@@ -138,7 +138,8 @@ public class UserImage extends FSSession {
                 if (relativePath == null) {
                     throw ProvisionErrors.unexpectedTaskFormat();
                 }
-                final File backupPath = UserHistory.getBackupPath(this, relativePath);
+                //final File backupPath = UserHistory.getBackupPath(this, relativePath);
+                final File backupPath = UserHistory.getBackupPath(fsImage.getFSEnvironment(), sessionId, relativePath);
                 if(backupPath.exists()) {
                     fsImage.write(backupPath, relativePath, username, false);
                 } else if (action == CREATE) {

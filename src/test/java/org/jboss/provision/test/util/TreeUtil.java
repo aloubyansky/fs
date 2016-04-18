@@ -42,24 +42,26 @@ import org.jboss.provision.util.IoUtils;
 public class TreeUtil {
 
     public static interface Formatter {
-        void append(PrintStream out, File f) throws IOException;
+        void append(PrintStream out, String relativePath, File f) throws IOException;
     }
 
     public static class DefaultFormatter implements Formatter {
         @Override
-        public void append(PrintStream out, File f) throws IOException {
+        public void append(PrintStream out, String relativePath, File f) throws IOException {
             if(f.isDirectory()) {
-                appendDir(out, f);
+                appendDir(out, relativePath, f);
             } else {
-                appendFile(out, f);
+                appendFile(out, relativePath, f);
             }
         }
-        protected void appendDir(PrintStream out, File dir) throws IOException {
+        protected void appendDir(PrintStream out, String relativePath, File dir) throws IOException {
             out.print(dir.getName());
         }
-        protected void appendFile(PrintStream out, File f) throws IOException {
+        protected void appendFile(PrintStream out, String relativePath, File f) throws IOException {
             out.print(f.getName());
-            out.print(" (hash=");
+            out.print(" (path=");
+            out.print(HashUtils.hashToHexString(relativePath));
+            out.print(" content=");
             out.print(HashUtils.bytesToHexString(HashUtils.hashFile(f)));
             out.print(')');
         }
@@ -70,12 +72,12 @@ public class TreeUtil {
         public void addFormatter(String path, Formatter formatter) {
             switch(formatters.size()) {
                 case 0:
-                    formatters = Collections.singletonMap('/' + path, formatter);
+                    formatters = Collections.singletonMap(path, formatter);
                     break;
                 case 1:
                     formatters = new HashMap<String, Formatter>(formatters);
                 default:
-                    formatters.put('/' + path, formatter);
+                    formatters.put(path, formatter);
             }
         }
         Formatter getFormatter(String path, Formatter defFormatter) {
@@ -87,9 +89,24 @@ public class TreeUtil {
     private static final Formatters FORMATTERS = new Formatters();
 
     static {
+        FORMATTERS.addFormatter(".fs", new DefaultFormatter() {
+            @Override
+            protected void appendFile(PrintStream out, String relativePath, File f) throws IOException {
+                out.print(f.getName());
+                out.print(" (content=");
+                out.print(HashUtils.bytesToHexString(HashUtils.hashFile(f)));
+                out.print(')');
+            }
+        });
+        FORMATTERS.addFormatter(".fs/users", new DefaultFormatter() {
+            @Override
+            protected void appendFile(PrintStream out, String relativePath, File f) throws IOException {
+                out.print(f.getName());
+            }
+        });
         FORMATTERS.addFormatter(".fs/ownership", new DefaultFormatter() {
             @Override
-            protected void appendFile(PrintStream out, File f) throws IOException {
+            protected void appendFile(PrintStream out, String relativePath, File f) throws IOException {
                 out.print(f.getName());
                 out.print(" (");
                 BufferedReader reader = null;
@@ -135,7 +152,7 @@ public class TreeUtil {
             }
         }
         final Formatter formatter = FORMATTERS.getFormatter(relativePath, defFormatter);
-        formatter.append(out, f);
+        formatter.append(out, relativePath, f);
         if(f.isDirectory()) {
             out.println();
             final File[] files = f.listFiles();
@@ -143,7 +160,7 @@ public class TreeUtil {
             while(i < files.length) {
                 final File c = files[i++];
                 depth.addLast(i != files.length);
-                buildTree(c, out, depth, relativePath + '/' + c.getName(), formatter);
+                buildTree(c, out, depth, relativePath.isEmpty() ? c.getName() : relativePath + '/' + c.getName(), formatter);
                 depth.removeLast();
             }
         } else {

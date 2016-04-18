@@ -40,7 +40,7 @@ import java.util.Set;
 class PathNode {
 
     private static void getPath(StringBuilder buf, PathNode l) {
-        if(l.parent != null) {
+        if(l.parent.parent != null) {
             getPath(buf, l.parent);
             buf.append('/');
         }
@@ -49,7 +49,8 @@ class PathNode {
 
     final PathNode parent;
     final File f;
-    protected ContentTask task;
+    protected ContentTask contentTask;
+    protected PathOwnership ownership;
     protected Map<String, PathNode> children = Collections.emptyMap();
 
     PathNode(PathNode parent, File f) {
@@ -57,12 +58,12 @@ class PathNode {
         this.f = f;
     }
 
-    ContentTask getTask() {
-        return task;
+    ContentTask getContentTask() {
+        return contentTask;
     }
 
     boolean isDeleted() {
-        return task != null && task.isDelete();
+        return contentTask != null && contentTask.isDelete();
     }
 
     int getChildrenTotal() {
@@ -73,7 +74,7 @@ class PathNode {
         if(actual.length == 0) {
             int count = 0;
             for(PathNode child : children.values()) {
-                if(child.task != null && !child.task.isDelete()) {
+                if(child.contentTask != null && !child.contentTask.isDelete()) {
                     ++count;
                 }
             }
@@ -81,8 +82,8 @@ class PathNode {
         }
         final Set<String> expected = new HashSet<String>(Arrays.asList(actual));
         for(PathNode child : children.values()) {
-            if(child.getTask() != null) {
-                if(child.getTask().isDelete()) {
+            if(child.getContentTask() != null) {
+                if(child.getContentTask().isDelete()) {
                     expected.remove(child.f.getName());
                 } else {
                     expected.add(child.f.getName());
@@ -118,9 +119,9 @@ class PathNode {
             }
         }
         out.print(node.f.getName());
-        if(node.task != null) {
+        if(node.contentTask != null) {
             out.print(" [");
-            out.print(node.task.isDelete() ? "deleted" : "written");
+            out.print(node.contentTask.isDelete() ? "deleted" : "written");
             out.println(']');
         } else {
             out.println();

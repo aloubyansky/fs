@@ -36,12 +36,12 @@ import org.jboss.provision.util.HashUtils;
 public class EnvImage extends FSSession {
 
     protected final FSEnvironment fsEnv;
-    protected final PathsOwnership ownership;
+    protected final RootPathNode root;
 
     public EnvImage(FSEnvironment env, String sessionId) {
         super(env, sessionId);
         this.fsEnv = env;
-        ownership = PathsOwnership.getInstance(fsEnv.getHistoryDir());
+        root = new RootPathNode(fsEnv.getHomeDir(), fsEnv.getHistoryDir());
     }
 
     protected FSEnvironment getFSEnvironment() {
@@ -96,10 +96,10 @@ public class EnvImage extends FSSession {
     }
 
     protected boolean isOnlyOwner(String user, String relativePath) throws ProvisionException {
-        return ownership.isOnlyOwner(user, relativePath);
+        return root.isOnlyOwner(user, relativePath);
     }
 
     protected void clear() {
-        ownership.clear();
+        root.clear();
     }
 }

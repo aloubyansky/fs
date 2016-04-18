@@ -38,6 +38,8 @@ public abstract class ContentTask {
     protected File backup;
     private final boolean cleanup;
 
+    protected ContentTask subtask;
+
     ContentTask(File target) {
         this(target, new File(target.getParentFile(), target.getName() + FSEnvironmentConfig.DEFAULT_BACKUP_SUFFIX), true);
     }
@@ -93,6 +95,10 @@ public abstract class ContentTask {
         }
         IoUtils.recursiveDelete(backup);
         backup = null;
+
+        if(subtask != null) {
+            subtask.revert();
+        }
     }
 
     public void cleanup() throws ProvisionException {
