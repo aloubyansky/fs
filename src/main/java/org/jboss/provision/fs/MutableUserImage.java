@@ -40,8 +40,12 @@ public class MutableUserImage extends UserImage {
     private final MutableEnvImage fsImage;
     private Map<String, String> journal = Collections.emptyMap();
 
-    MutableUserImage(UserHistory history, String author, MutableEnvImage fsImage) {
-        super(history, author, fsImage.sessionId);
+    MutableUserImage(UserHistory history, String username, MutableEnvImage fsImage) {
+        this(history, username, fsImage, fsImage.sessionId);
+    }
+
+    MutableUserImage(UserHistory history, String author, MutableEnvImage fsImage, String sessionId) {
+        super(history, author, sessionId);
         this.fsImage = fsImage;
     }
 
@@ -50,7 +54,7 @@ public class MutableUserImage extends UserImage {
     }
 
     public MutableUserImage delete(String relativePath) throws ProvisionException {
-        fsImage.delete(relativePath, username, true);
+        fsImage.delete(relativePath, this, true);
         return this;
     }
 
@@ -104,10 +108,6 @@ public class MutableUserImage extends UserImage {
             getPaths().remove(relativePath);
         }
         putInJournal(relativePath, DELETE, dir);
-    }
-
-    protected File getBackupPath(String relativePath) {
-        return UserHistory.getBackupPath(username, fsImage, relativePath);
     }
 
     protected void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {

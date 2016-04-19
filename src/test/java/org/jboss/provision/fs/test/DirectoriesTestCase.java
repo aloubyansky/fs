@@ -76,19 +76,20 @@ public class DirectoriesTestCase extends FSTestBase {
         FSAssert.assertPaths(env, "a/b/c");
 
         env.newImage()
-            .getUserImage("userA")
-                .mkdirs("a/b/c/d")
-                .getEnvImage()
             .getUserImage("userB")
                 .delete("a/b/c")
+                .getEnvImage()
+            .getUserImage("userA")
+                .mkdirs("a/b/c/d")
                 .getEnvImage()
             .commit();
 
         FSAssert.assertUsers(env, "userA", "userB");
         FSAssert.assertPaths("userA", env);
         FSAssert.assertPaths("userB", env);
-        FSAssert.assertPaths(env, "a/b");
+        FSAssert.assertPaths(env, "a/b/c/d");
 
+        System.out.println("before undo");
         env.undoLastCommit();
 
         FSAssert.assertUsers(env, "userA", "userB");

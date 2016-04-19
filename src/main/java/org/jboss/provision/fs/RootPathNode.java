@@ -22,10 +22,7 @@
 
 package org.jboss.provision.fs;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -34,8 +31,6 @@ import java.util.NoSuchElementException;
 
 import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
-import org.jboss.provision.util.HashUtils;
-import org.jboss.provision.util.IoUtils;
 
 /**
  *
@@ -43,15 +38,14 @@ import org.jboss.provision.util.IoUtils;
  */
 public class RootPathNode extends PathNode {
 
-    private static final String OWNERSHIPS_DIR_NAME = "ownership";
-    private static final String EXTERNAL_USER_TRUE = "externalUser=true";
+    private static final String PATHS_REPO_DIR = "paths";
 
     private final File pathsRepoDir;
     private Map<String, PathNode> tasks = new HashMap<String, PathNode>();
 
     RootPathNode(File f, File historyDir) {
         super(null, f);
-        this.pathsRepoDir = new File(historyDir, OWNERSHIPS_DIR_NAME);
+        this.pathsRepoDir = new File(historyDir, PATHS_REPO_DIR);
     }
 
     PathNode get(String relativePath) {
@@ -145,11 +139,11 @@ public class RootPathNode extends PathNode {
         }
     }
 
-    boolean giveUp(String user, String path) throws ProvisionException {
-        return giveUp(user, path, false);
+    boolean giveUp(UserImage userImage, String path) throws ProvisionException {
+        return giveUp(userImage, path, false);
     }
 
-    boolean giveUp(String user, String path, boolean safe) throws ProvisionException {
+    boolean giveUp(UserImage userImage, String path, boolean safe) throws ProvisionException {
         boolean removed = false;
 
         PathNode node = tasks.get(path);
@@ -160,7 +154,7 @@ public class RootPathNode extends PathNode {
             node.ownership = loadOwnership(pathsRepoDir, path);
         }
         if(node.ownership != null) {
-            removed = node.ownership.removeUser(user);
+            removed = node.ownership.removeUser(userImage.getUsername());
         }
         if(removed) {
             return node.ownership.isOwned();
@@ -168,7 +162,7 @@ public class RootPathNode extends PathNode {
         if(safe) {
             return false;
         }
-        throw ProvisionErrors.userDoesNotOwnTargetPath(user, path);
+        throw ProvisionErrors.userDoesNotOwnTargetPath(userImage.getUsername(), path);
     }
 
     boolean isDeleted(String relativePath) {
@@ -186,7 +180,7 @@ public class RootPathNode extends PathNode {
         return false;
     }
 
-    void deleteDir(String relativePath, DeleteTask task) throws ProvisionException {
+    void deleteDir(MutableUserImage userImage, String relativePath, DeleteTask task) throws ProvisionException {
         final String[] segments = relativePath.split("/");
         PathNode target = this;
         for(String name : segments) {
@@ -202,13 +196,13 @@ public class RootPathNode extends PathNode {
         }
         setTask(target, task);
         if(!target.children.isEmpty()) {
-            unsetChildTasks(target);
+            deleteChildren(target, userImage, relativePath);
             target.children = Collections.emptyMap();
         }
     }
 
-    boolean delete(String user, String relativePath, DeleteTask task) throws ProvisionException {
-        if(giveUp(user, relativePath)) {
+    boolean delete(MutableUserImage userImage, String relativePath, DeleteTask task) throws ProvisionException {
+        if(giveUp(userImage, relativePath)) {
             return false; // still owned
         }
 
@@ -226,14 +220,14 @@ public class RootPathNode extends PathNode {
             target = child;
         }
         setTask(target, task);
-        if(!target.children.isEmpty()) { // it shouldn't be called to dirs actually
-            unsetChildTasks(target);
+        if(!target.children.isEmpty()) { // it shouldn't be called for dirs actually
+            deleteChildren(target, userImage, relativePath);
             target.children = Collections.emptyMap();
         }
         return true;
     }
 
-    void write(String user, String relativePath, ContentWriter task, boolean dir) throws ProvisionException {
+    void write(MutableUserImage userImage, String relativePath, ContentWriter task, boolean dir) throws ProvisionException {
         final String[] segments = relativePath.split("/");
         PathNode parent = this;
         int i = 0;
@@ -243,8 +237,8 @@ public class RootPathNode extends PathNode {
             if(child == null) {
                 child = newChild(parent, name);
             } else if(child.isDeleted()) {
-                unsetTask(child);
-                deleteChildren(child);
+                child.contentTask = null;
+                deleteChildren(child, userImage, child.getPath());
             }
             parent = child;
         }
@@ -252,11 +246,11 @@ public class RootPathNode extends PathNode {
         if(target == null) {
             target = newChild(parent, segments[i]);
         } else if(dir && target.isDeleted()) {
-            deleteChildren(target);
+            deleteChildren(target, userImage, relativePath);
         }
         setTask(target, task);
         if(!dir) {
-            grab(user, relativePath);
+            grab(userImage.getUsername(), relativePath);
         }
     }
 
@@ -274,21 +268,11 @@ public class RootPathNode extends PathNode {
         return leaf;
     }
 
-    private void unsetChildTasks(PathNode node) {
-        for(PathNode child : node.children.values()) {
-            if(!child.children.isEmpty()) {
-                unsetChildTasks(child);
-            } else if(child.contentTask != null) {
-                unsetTask(child);
-            }
-        }
-    }
-
-    private void deleteChildren(PathNode node) {
+    private void deleteChildren(PathNode node, MutableUserImage userImage, String relativePath) throws ProvisionException {
         if(!node.children.isEmpty()) {
             for (PathNode child : node.children.values()) {
-                if(child.contentTask == null || !child.contentTask.isDelete()) {
-                    setTask(child, new DeleteTask(child.f)); // TODO proper backup
+                if(!child.isDeleted()) {
+                    userImage.delete(relativePath + '/' + child.f.getName());
                 }
             }
         }
@@ -296,7 +280,7 @@ public class RootPathNode extends PathNode {
         if(fsChildren.length > 0) {
             for(String name : fsChildren) {
                 if(!node.children.containsKey(name)) {
-                    setTask(newChild(node, name), new DeleteTask(new File(node.f, name))); // TODO proper backup
+                    userImage.delete(relativePath + '/' + name);
                 }
             }
         }
@@ -311,35 +295,9 @@ public class RootPathNode extends PathNode {
         }
     }
 
-    private void unsetTask(PathNode node) {
-        node.contentTask = null;
-    }
-
     void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
-        for(Map.Entry<String, PathNode> entry : tasks.entrySet()) {
-            final PathNode node = entry.getValue();
-            final PathOwnership pathOwnership = node.ownership;
-            if(pathOwnership == null) {
-                continue;
-            }
-            String pathHash;
-            try {
-                pathHash = HashUtils.hashToHexString(entry.getKey());
-            } catch (IOException e) {
-                throw ProvisionErrors.hashCalculationFailed(entry.getKey(), e);
-            }
-            if(pathOwnership.isOwned()) {
-                final StringBuilder writer = new StringBuilder();
-                if(pathOwnership.isExternalUser()) {
-                    writer.append(EXTERNAL_USER_TRUE).append(FileUtils.LS);
-                }
-                for(String user : pathOwnership.getUsers()) {
-                    writer.append(user).append(FileUtils.LS);
-                }
-                fsImage.write(writer.toString(), new File(pathsRepoDir, pathHash));
-            } else {
-                fsImage.delete(new File(pathsRepoDir, pathHash));
-            }
+        for(PathNode node : tasks.values()) {
+            node.schedulePersistence(fsImage, pathsRepoDir);
         }
     }
 
@@ -378,46 +336,5 @@ public class RootPathNode extends PathNode {
     void clear() {
         tasks.clear();
         children = Collections.emptyMap();
-    }
-
-    static PathOwnership loadOwnership(File persistDir, String relativePath) throws ProvisionException {
-        //final String[] steps = relativePath.split("/");
-        //final File ownershipFile = IoUtils.newFile(persistDir, steps);
-        File ownershipFile;
-        try {
-            ownershipFile = new File(persistDir, HashUtils.hashToHexString(relativePath));
-        } catch (IOException e) {
-            throw ProvisionErrors.hashCalculationFailed(relativePath, e);
-        }
-        if(!ownershipFile.exists()) {
-            return null;
-        }
-        if(ownershipFile.isDirectory()) {
-            return null;
-        }
-        BufferedReader reader = null;
-        try {
-            reader = new BufferedReader(new FileReader(ownershipFile));
-            String line = reader.readLine();
-            if(line == null) {
-                return null;
-            }
-            final PathOwnership ownership;
-            if(EXTERNAL_USER_TRUE.equals(line)) {
-                ownership = new PathOwnership(true);
-            } else {
-                ownership = new PathOwnership(line);
-            }
-            line = reader.readLine();
-            while(line != null) {
-                ownership.addUser(line);
-                line = reader.readLine();
-            }
-            return ownership;
-        } catch(IOException e) {
-            throw ProvisionErrors.readError(ownershipFile, e);
-        } finally {
-            IoUtils.safeClose(reader);
-        }
     }
 }

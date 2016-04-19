@@ -42,6 +42,8 @@ public class DeleteUserTestCase extends FSTestBase {
                 .getEnvImage()
             .commit();
 
+        TreeUtil.logTree(env.getHomeDir());
+
         FSAssert.assertPaths(env,
                 "aaa.txt",
                 "a/aa/aaa.txt");
@@ -55,6 +57,8 @@ public class DeleteUserTestCase extends FSTestBase {
                 .getEnvImage()
             .commit();
 
+        TreeUtil.logTree(env.getHomeDir());
+
         FSAssert.assertPaths(env,
                 "aaa.txt",
                 "a2.txt",
@@ -63,6 +67,8 @@ public class DeleteUserTestCase extends FSTestBase {
         FSAssert.assertPaths("userA", env, "aaa.txt", "a2.txt", "a/aa/aaa.txt");
 
         env.deleteUser("userA");
+
+        TreeUtil.logTree(env.getHomeDir());
     }
 
     @Test

@@ -22,7 +22,9 @@
 
 package org.jboss.provision.fs;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,8 +45,6 @@ import org.jboss.provision.util.IoUtils;
 public class UserHistory extends FSSessionHistory {
 
     private static final String USERS_DIR_NAME = "users";
-    private static final String BACKUP = "backup";
-
 
     private static File getUsersDir(FSEnvironment env) {
         return new File(env.getHistoryDir(), USERS_DIR_NAME);
@@ -64,19 +64,6 @@ public class UserHistory extends FSSessionHistory {
             return Collections.emptyList();
         }
         return Arrays.asList(usersDir.list());
-    }
-
-    static File getBackupPath(UserImage user, String relativePath) {
-        return IoUtils.newFile(user.getSessionDir(), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
-    }
-
-    static File getBackupPath(String user, EnvImage fsImage, String relativePath) {
-        //return IoUtils.newFile(getUserImageDir(fsImage.getFSEnvironment(), user, fsImage.sessionId), BACKUP, FSEnvironment.getFSRelativePath(relativePath));
-        return getBackupPath(fsImage.getFSEnvironment(), fsImage.sessionId, relativePath);
-    }
-
-    static File getBackupPath(FSEnvironment env, String sessionId, String relativePath) {
-        return IoUtils.newFile(env.getHistoryDir(), sessionId, BACKUP, FSEnvironment.getFSRelativePath(relativePath));
     }
 
     static UserImage loadUserImage(FSEnvironment env, String user, String imageId) throws ProvisionException {
@@ -139,8 +126,53 @@ public class UserHistory extends FSSessionHistory {
         }
         for(String user : allUsers) {
             final File imagePath = getUserImageDir(envImage.getFSEnvironment(), user, imageId);
+            System.out.println("UserHistory.undo " + user);
             if(imagePath.isDirectory()) {
-                loadUserImage(envImage.getFSEnvironment(), user, imageId).undo(envImage);
+                final File tasksFile = new File(imagePath, UserImage.TASKS);
+                if(!tasksFile.exists()) {
+                    continue;
+                }
+
+                final MutableUserImage userImage = envImage.getUserImage(user);
+                BufferedReader reader = null;
+                try {
+                    reader = new BufferedReader(new FileReader(tasksFile));
+                    String line = reader.readLine();
+                    while (line != null) {
+                        final char action = line.charAt(0);
+                        final char contentType = line.charAt(1);
+                        final String relativePath = line.substring(2);
+                        if (relativePath == null) {
+                            throw ProvisionErrors.unexpectedTaskFormat();
+                        }
+                        final File backupPath = envImage.getBackupPath(relativePath, imageId);
+                        System.out.println("   " + line);
+                        if(backupPath.exists()) {
+                            envImage.write(backupPath, relativePath, user, false);
+                        } else if (action == UserImage.CREATE) {
+                            envImage.delete(relativePath, userImage, false);
+                        } else if (action == UserImage.GRAB) {
+                            if(envImage.isOnlyOwner(user, relativePath)) {
+                                envImage.delete(relativePath, userImage, false);
+                            } else {
+                                envImage.giveUp(envImage.fsEnv.getFile(relativePath), relativePath, userImage, false);
+                            }
+                        } else if(action == UserImage.UPDATE) {
+                        } else if(contentType == 'f') {
+                            envImage.grab(relativePath, user);
+                        } else if(contentType == 'd') {
+                            System.out.println("   mkdirs " + relativePath);
+                            envImage.mkdirs(relativePath, user);
+                        }
+                        line = reader.readLine();
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    IoUtils.safeClose(reader);
+                }
+
+                loadUserImage(envImage.getFSEnvironment(), user, imageId).scheduleDelete(envImage);
             } else {
                 envImage.delete(imagePath);
             }
@@ -153,23 +185,24 @@ public class UserHistory extends FSSessionHistory {
         if(!userHistory.getHistoryDir().exists()) {
             throw ProvisionErrors.unknownUnit(user);
         }
-        UserImage userImage = userHistory.loadLatest();
-        if(userImage == null) {
+        UserImage prevUserImage = userHistory.loadLatest();
+        if(prevUserImage == null) {
             throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
         }
 
-        for(String path : userImage.getPaths()) {
-            envImage.delete(path, user, false);
+        final MutableUserImage userImage = envImage.getUserImage(user);
+        for(String path : prevUserImage.getPaths()) {
+            envImage.delete(path, userImage, false);
         }
 
-        deleteCommitRecords(envImage, userImage.sessionId, user);
-        env.getImage(userImage.sessionId).scheduleDelete(envImage);
-        String prevId = userImage.getPreviousRecordId();
+        deleteCommitRecords(envImage, prevUserImage.sessionId, user);
+        env.getImage(prevUserImage.sessionId).scheduleDelete(envImage);
+        String prevId = prevUserImage.getPreviousRecordId();
         while(prevId != null) {
             deleteCommitRecords(envImage, prevId, user);
-            userImage = userHistory.loadImage(prevId);
+            prevUserImage = userHistory.loadImage(prevId);
             final EnvImage prevEnvImage = env.getImage(prevId);
-            prevId = userImage.getPreviousRecordId();
+            prevId = prevUserImage.getPreviousRecordId();
             prevEnvImage.scheduleDelete(envImage);
         }
 
@@ -226,6 +259,10 @@ public class UserHistory extends FSSessionHistory {
 
     MutableUserImage newImage(MutableEnvImage fsImage) {
         return new MutableUserImage(this, author, fsImage);
+    }
+
+    MutableUserImage loadMutableImage(MutableEnvImage fsImage, String sessionId) {
+        return new MutableUserImage(this, author, fsImage, sessionId);
     }
 
     UserImage loadImage(String imageId) throws ProvisionException {

@@ -104,7 +104,7 @@ public class TreeUtil {
                 out.print(f.getName());
             }
         });
-        FORMATTERS.addFormatter(".fs/ownership", new DefaultFormatter() {
+        FORMATTERS.addFormatter(".fs/paths", new DefaultFormatter() {
             @Override
             protected void appendFile(PrintStream out, String relativePath, File f) throws IOException {
                 out.print(f.getName());
