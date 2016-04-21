@@ -66,7 +66,7 @@ public class FSEnvironment extends FSSessionHistory {
         return new File(homeDir, getFSRelativePath(relativePath));
     }
 
-    public MutableEnvImage newImage() {
+    public MutableEnvImage newImage() throws ProvisionException {
         return new MutableEnvImage(this);
     }
 
@@ -114,8 +114,9 @@ public class FSEnvironment extends FSSessionHistory {
         if(lastImageId == null) {
             throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
         }
-        final MutableEnvImage image = new MutableEnvImage(this, lastImageId);
-        image.undo();
+        final MutableEnvImage undoImage = new MutableEnvImage(this, lastImageId);
+        final MutableEnvImage image = newImage();
+        undoImage.undo(image);
         image.executeUpdates();
     }
 

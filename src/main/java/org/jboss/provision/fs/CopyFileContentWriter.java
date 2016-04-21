@@ -28,6 +28,8 @@ import java.io.FileReader;
 import java.io.IOException;
 
 import org.jboss.provision.ProvisionErrors;
+import org.jboss.provision.ProvisionException;
+import org.jboss.provision.util.HashUtils;
 import org.jboss.provision.util.IoUtils;
 
 /**
@@ -67,6 +69,18 @@ class CopyFileContentWriter extends ContentWriter {
             }
         } finally {
             IoUtils.safeClose(reader);
+        }
+    }
+    @Override
+    protected boolean canHashContent() {
+        return true;
+    }
+    @Override
+    protected byte[] getContentHash() throws ProvisionException {
+        try {
+            return HashUtils.hashFile(f);
+        } catch (IOException e) {
+            throw ProvisionErrors.hashCalculationFailed(f.getAbsolutePath(), e);
         }
     }
     @Override

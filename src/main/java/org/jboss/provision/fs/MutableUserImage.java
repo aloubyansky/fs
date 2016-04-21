@@ -64,7 +64,7 @@ public class MutableUserImage extends UserImage {
     }
 
     public MutableUserImage write(File content, String relativePath) throws ProvisionException {
-        fsImage.write(content, relativePath, username, true);
+        fsImage.write(content, relativePath, username);
         return this;
     }
 
@@ -73,41 +73,24 @@ public class MutableUserImage extends UserImage {
         return this;
     }
 
-    protected void addPath(File target, String relativePath, boolean dir, boolean own) throws ProvisionException {
-        boolean journaled = false;
-        int i = relativePath.indexOf('/');
-        while(i >= 0) {
-            final String stepPath = relativePath.substring(0, i);
-            if(!fsImage.contains(stepPath)) {
-                putInJournal(stepPath, 'c', true);
-                journaled = true;
-                break;
-            }
-            i = relativePath.indexOf('/', i + 1);
-        }
-        if(!dir) {
-            getPaths().add(relativePath);
-        }
-        if(!journaled) {
-            final char action;
-            if(target.exists()) {
-                if(own) {
-                    action = UPDATE;
-                } else {
-                    action = GRAB;
-                }
+    protected void addPath(File target, String relativePath, boolean own) throws ProvisionException {
+        getPaths().add(relativePath);
+        final char action;
+        if (target.exists()) {
+            if (own) {
+                action = UPDATE;
             } else {
-                action = CREATE;
+                action = GRAB;
             }
-            putInJournal(relativePath, action, dir);
+        } else {
+            action = CREATE;
         }
+        putInJournal(relativePath, action);
     }
 
-    protected void removePath(String relativePath, boolean dir) throws ProvisionException {
-        if(!dir) {
-            getPaths().remove(relativePath);
-        }
-        putInJournal(relativePath, DELETE, dir);
+    protected void removePath(String relativePath) throws ProvisionException {
+        getPaths().remove(relativePath);
+        putInJournal(relativePath, DELETE);
     }
 
     protected void scheduleUnaffectedPersistence(MutableEnvImage fsImage) throws ProvisionException {
@@ -129,9 +112,9 @@ public class MutableUserImage extends UserImage {
         });
     }
 
-    private void putInJournal(String relativePath, char c, boolean dir) {
+    private void putInJournal(String relativePath, char c) {
         final StringBuilder buf = new StringBuilder(2);
-        buf.append(c).append(dir ? 'd' : 'f');
+        buf.append(c);
         switch(journal.size()) {
             case 0:
                 journal = Collections.singletonMap(relativePath, buf.toString());

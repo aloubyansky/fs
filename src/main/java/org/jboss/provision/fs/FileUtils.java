@@ -27,6 +27,9 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import org.jboss.provision.ProvisionErrors;
@@ -62,6 +65,31 @@ public class FileUtils {
             IoUtils.safeClose(writer);
         }
         return writer.getBuffer().toString();
+    }
+
+    public static List<String> readList(File f) throws IOException {
+        assert f != null : ProvisionErrors.nullArgument("file");
+        BufferedReader reader = null;
+        try {
+            reader = new BufferedReader(new FileReader(f));
+            String line = reader.readLine();
+            if(line == null) {
+                return Collections.emptyList();
+            }
+            List<String> list = Collections.singletonList(line);
+            line = reader.readLine();
+            if(line == null) {
+                return list;
+            }
+            list = new ArrayList<String>(list);
+            while(line != null) {
+                list.add(line);
+                line = reader.readLine();
+            }
+            return list;
+        } finally {
+            IoUtils.safeClose(reader);
+        }
     }
 
     public static Properties loadProperties(File f) throws IOException {

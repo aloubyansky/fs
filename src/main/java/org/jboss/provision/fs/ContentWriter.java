@@ -57,10 +57,6 @@ public abstract class ContentWriter extends ContentTask {
         } finally {
             IoUtils.safeClose(writer);
         }
-
-        if(subtask != null) {
-            subtask.execute();
-        }
     }
 
     public abstract void write(BufferedWriter writer) throws IOException, ProvisionException;

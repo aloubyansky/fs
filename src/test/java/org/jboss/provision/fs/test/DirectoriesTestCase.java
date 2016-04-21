@@ -89,7 +89,6 @@ public class DirectoriesTestCase extends FSTestBase {
         FSAssert.assertPaths("userB", env);
         FSAssert.assertPaths(env, "a/b/c/d");
 
-        System.out.println("before undo");
         env.undoLastCommit();
 
         FSAssert.assertUsers(env, "userA", "userB");

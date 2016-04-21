@@ -23,7 +23,6 @@
 package org.jboss.provision.fs.test;
 
 import org.jboss.provision.test.util.FSAssert;
-import org.jboss.provision.test.util.TreeUtil;
 import org.junit.Test;
 
 /**
@@ -42,8 +41,6 @@ public class DeleteUserTestCase extends FSTestBase {
                 .getEnvImage()
             .commit();
 
-        TreeUtil.logTree(env.getHomeDir());
-
         FSAssert.assertPaths(env,
                 "aaa.txt",
                 "a/aa/aaa.txt");
@@ -57,8 +54,6 @@ public class DeleteUserTestCase extends FSTestBase {
                 .getEnvImage()
             .commit();
 
-        TreeUtil.logTree(env.getHomeDir());
-
         FSAssert.assertPaths(env,
                 "aaa.txt",
                 "a2.txt",
@@ -67,8 +62,6 @@ public class DeleteUserTestCase extends FSTestBase {
         FSAssert.assertPaths("userA", env, "aaa.txt", "a2.txt", "a/aa/aaa.txt");
 
         env.deleteUser("userA");
-
-        TreeUtil.logTree(env.getHomeDir());
     }
 
     @Test
@@ -107,18 +100,31 @@ public class DeleteUserTestCase extends FSTestBase {
                 "b/bb.txt",
                 "a/aa/aaa.txt",
                 "a/aa/bbb.txt");
+
         FSAssert.assertUsers(env, "userA", "userB");
         FSAssert.assertPaths("userA", env, "shared.txt", "a/aa/aaa.txt", "a.txt");
         FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt", "b/bb.txt");
+        assertContent("shared.txt", "a2");
+        assertContent("a.txt", "a2");
+        assertContent("a/aa/aaa.txt", "a");
+        assertContent("a/aa/bbb.txt", "b");
+        assertContent("b/bb.txt", "b");
 
+        logTree();
         env.deleteUser("userA");
+        logTree();
 
         FSAssert.assertPaths(env,
                 "shared.txt",
                 "b/bb.txt",
                 "a/aa/bbb.txt");
+
         FSAssert.assertUsers(env, "userB");
         FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt", "b/bb.txt");
+        FSAssert.assertPaths(env, "shared.txt", "a/aa/bbb.txt", "b/bb.txt");
+        assertContent("shared.txt", "b");
+        assertContent("a/aa/bbb.txt", "b");
+        assertContent("b/bb.txt", "b");
 
         env.undoLastCommit();
 
@@ -128,10 +134,9 @@ public class DeleteUserTestCase extends FSTestBase {
         FSAssert.assertUsers(env, "userB");
         FSAssert.assertPaths("userB", env, "shared.txt", "a/aa/bbb.txt");
 
-        System.out.println("undo");
-        TreeUtil.logTree(env.getHomeDir());
+        logTree();
         env.undoLastCommit();
-        TreeUtil.logTree(env.getHomeDir());
+        logTree();
 
         FSAssert.assertNoContent(env);
     }

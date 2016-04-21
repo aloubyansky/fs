@@ -24,7 +24,6 @@ package org.jboss.provision.fs.test;
 
 import org.jboss.provision.test.util.FSAssert;
 import org.jboss.provision.test.util.FSUtils;
-import org.jboss.provision.test.util.TreeUtil;
 import org.junit.Test;
 
 /**
@@ -249,11 +248,7 @@ public class ConcurrentUpdatesTestCase extends FSTestBase {
         FSAssert.assertPaths("userB", env);
         FSAssert.assertNoContent(env);
 
-        TreeUtil.logTree(env.getHomeDir());
-
         env.undoLastCommit();
-
-        TreeUtil.logTree(env.getHomeDir());
 
         FSAssert.assertUsers(env, "userA", "userB");
         FSAssert.assertPaths("userA", env, "test/test.txt");

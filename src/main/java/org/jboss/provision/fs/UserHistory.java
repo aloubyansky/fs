@@ -119,14 +119,13 @@ public class UserHistory extends FSSessionHistory {
         return sessionPath;
     }
 
-    static void undo(MutableEnvImage envImage, String imageId) throws ProvisionException {
+    static void undo(MutableEnvImage envImage, String sessionId) throws ProvisionException {
         final List<String> allUsers = listUsers(envImage.getFSEnvironment());
         if(allUsers.isEmpty()) {
             return;
         }
         for(String user : allUsers) {
-            final File imagePath = getUserImageDir(envImage.getFSEnvironment(), user, imageId);
-            System.out.println("UserHistory.undo " + user);
+            final File imagePath = getUserImageDir(envImage.getFSEnvironment(), user, sessionId);
             if(imagePath.isDirectory()) {
                 final File tasksFile = new File(imagePath, UserImage.TASKS);
                 if(!tasksFile.exists()) {
@@ -139,30 +138,17 @@ public class UserHistory extends FSSessionHistory {
                     reader = new BufferedReader(new FileReader(tasksFile));
                     String line = reader.readLine();
                     while (line != null) {
+                        System.out.println("UserHistory.undo " + user + " " + line);
                         final char action = line.charAt(0);
-                        final char contentType = line.charAt(1);
-                        final String relativePath = line.substring(2);
+                        final String relativePath = line.substring(1);
                         if (relativePath == null) {
                             throw ProvisionErrors.unexpectedTaskFormat();
                         }
-                        final File backupPath = envImage.getBackupPath(relativePath, imageId);
-                        System.out.println("   " + line);
-                        if(backupPath.exists()) {
-                            envImage.write(backupPath, relativePath, user, false);
-                        } else if (action == UserImage.CREATE) {
-                            envImage.delete(relativePath, userImage, false);
-                        } else if (action == UserImage.GRAB) {
-                            if(envImage.isOnlyOwner(user, relativePath)) {
-                                envImage.delete(relativePath, userImage, false);
-                            } else {
-                                envImage.giveUp(envImage.fsEnv.getFile(relativePath), relativePath, userImage, false);
-                            }
+                        if (action == UserImage.CREATE || action == UserImage.GRAB) {
+                            envImage.giveUp(envImage.fsEnv.getFile(relativePath), relativePath, userImage, false);
                         } else if(action == UserImage.UPDATE) {
-                        } else if(contentType == 'f') {
+                        } else {
                             envImage.grab(relativePath, user);
-                        } else if(contentType == 'd') {
-                            System.out.println("   mkdirs " + relativePath);
-                            envImage.mkdirs(relativePath, user);
                         }
                         line = reader.readLine();
                     }
@@ -172,7 +158,7 @@ public class UserHistory extends FSSessionHistory {
                     IoUtils.safeClose(reader);
                 }
 
-                loadUserImage(envImage.getFSEnvironment(), user, imageId).scheduleDelete(envImage);
+                loadUserImage(envImage.getFSEnvironment(), user, sessionId).scheduleDelete(envImage);
             } else {
                 envImage.delete(imagePath);
             }
@@ -190,20 +176,20 @@ public class UserHistory extends FSSessionHistory {
             throw ProvisionErrors.noHistoryRecordedUntilThisPoint();
         }
 
-        final MutableUserImage userImage = envImage.getUserImage(user);
-        for(String path : prevUserImage.getPaths()) {
-            envImage.delete(path, userImage, false);
-        }
+//        final MutableUserImage userImage = envImage.getUserImage(user);
+//        for(String path : prevUserImage.getPaths()) {
+//            envImage.delete(path, userImage, false);
+//        }
 
         deleteCommitRecords(envImage, prevUserImage.sessionId, user);
-        env.getImage(prevUserImage.sessionId).scheduleDelete(envImage);
+        env.getImage(prevUserImage.sessionId).undo(envImage);//.scheduleDelete(envImage);
         String prevId = prevUserImage.getPreviousRecordId();
         while(prevId != null) {
             deleteCommitRecords(envImage, prevId, user);
             prevUserImage = userHistory.loadImage(prevId);
             final EnvImage prevEnvImage = env.getImage(prevId);
             prevId = prevUserImage.getPreviousRecordId();
-            prevEnvImage.scheduleDelete(envImage);
+            prevEnvImage.undo(envImage);//.scheduleDelete(envImage);
         }
 
         envImage.delete(userHistory.getHistoryDir());

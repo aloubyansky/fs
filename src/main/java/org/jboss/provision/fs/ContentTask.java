@@ -23,6 +23,7 @@ package org.jboss.provision.fs;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.UUID;
 
 import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
@@ -34,14 +35,14 @@ import org.jboss.provision.util.IoUtils;
  */
 public abstract class ContentTask {
 
+
     protected final File target;
     protected File backup;
     private final boolean cleanup;
 
-    protected ContentTask subtask;
-
     ContentTask(File target) {
-        this(target, new File(target.getParentFile(), target.getName() + FSEnvironmentConfig.DEFAULT_BACKUP_SUFFIX), true);
+        //this(target, new File(target.getParentFile(), target.getName() + FSEnvironmentConfig.DEFAULT_BACKUP_SUFFIX), true);
+        this(target, new File(IoUtils.getIoTmpDir(), UUID.randomUUID().toString()), true);
     }
 
     protected ContentTask(File target, File backup, boolean cleanup) {
@@ -63,6 +64,14 @@ public abstract class ContentTask {
     }
 
     public File getContentFile() {
+        throw new UnsupportedOperationException();
+    }
+
+    protected boolean canHashContent() {
+        return false;
+    }
+
+    protected byte[] getContentHash() throws ProvisionException {
         throw new UnsupportedOperationException();
     }
 
@@ -95,10 +104,6 @@ public abstract class ContentTask {
         }
         IoUtils.recursiveDelete(backup);
         backup = null;
-
-        if(subtask != null) {
-            subtask.revert();
-        }
     }
 
     public void cleanup() throws ProvisionException {

@@ -38,7 +38,7 @@ public class EnvImage extends FSSession {
     protected final FSEnvironment fsEnv;
     protected final RootPathNode root;
 
-    public EnvImage(FSEnvironment env, String sessionId) {
+    public EnvImage(FSEnvironment env, String sessionId) throws ProvisionException {
         super(env, sessionId);
         this.fsEnv = env;
         root = new RootPathNode(fsEnv.getHomeDir(), fsEnv.getHistoryDir());
@@ -88,7 +88,7 @@ public class EnvImage extends FSSession {
         }
     }
 
-    protected byte[] getHash(File target) throws IOException {
+    protected byte[] getHash(File target) throws ProvisionException, IOException {
         if(!target.exists()) {
             return null;
         }
@@ -101,5 +101,48 @@ public class EnvImage extends FSSession {
 
     protected void clear() {
         root.clear();
+    }
+
+    protected void undo(MutableEnvImage envImage) throws ProvisionException {
+
+        System.out.println("EnvImage.undo " + sessionId);
+        if(!sessionDir.exists()) {
+            throw ProvisionErrors.pathDoesNotExist(sessionDir.getAbsoluteFile());
+        }
+
+        UserHistory.undo(envImage, sessionId);
+
+        //final boolean lastCommit = sessionId.equals(fsEnv.getLastSessionId());
+
+        final File deletedDir = new File(sessionDir, "d");
+        if(deletedDir.exists()) {
+            for(File deletedPath : deletedDir.listFiles()) {
+                try {
+                    final String content = FileUtils.readFile(deletedPath);
+                    System.out.println("  d path=" + deletedPath.getName() + " content=" + content);
+                    envImage.root.getByHash(deletedPath.getName(), "dir".equals(content)).scheduleUndo(envImage, sessionId, false);
+                } catch (IOException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        final File writeDir = new File(sessionDir, "w");
+        if(writeDir.exists()) {
+            for(File path : writeDir.listFiles()) {
+                try {
+                    final String content = FileUtils.readFile(path);
+                    System.out.println("  w path=" + path.getName() + " content=" + content);
+                    envImage.root.getByHash(path.getName(), "dir".equals(content)).scheduleUndo(envImage, sessionId, true);
+                } catch (IOException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        //root.scheduleUndo(this);
+        super.scheduleDelete(envImage);
     }
 }

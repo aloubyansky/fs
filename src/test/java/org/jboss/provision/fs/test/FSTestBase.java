@@ -23,10 +23,13 @@
 package org.jboss.provision.fs.test;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.jboss.provision.fs.FSEnvironment;
 import org.jboss.provision.fs.FSEnvironmentConfig;
+import org.jboss.provision.test.util.FSAssert;
 import org.jboss.provision.test.util.FSUtils;
+import org.jboss.provision.test.util.TreeUtil;
 import org.jboss.provision.util.IoUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -60,6 +63,10 @@ public class FSTestBase {
     protected void doAfter() throws Exception {
     }
 
+    protected void assertContent(String relativePath, String content) throws Exception {
+        FSAssert.assertContent(env.getFile(relativePath), content);
+    }
+
     protected void assertEmptyDir(File f) {
         String[] list = f.list();
         if(list == null) {
@@ -74,5 +81,13 @@ public class FSTestBase {
             throw new IllegalArgumentException(f.getAbsolutePath() + " is a file");
         }
         Assert.assertTrue(list.length > 0);
+    }
+
+    protected void logTree() {
+        try {
+            TreeUtil.logTree(env.getHomeDir());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

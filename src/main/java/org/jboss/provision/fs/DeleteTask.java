@@ -22,9 +22,12 @@
 package org.jboss.provision.fs;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.UUID;
 
+import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
+import org.jboss.provision.util.HashUtils;
 import org.jboss.provision.util.IoUtils;
 
 /**
@@ -60,11 +63,18 @@ class DeleteTask extends ContentTask {
         };
     };
 
+    private final boolean ifEmpty;
+
     protected DeleteTask(File target) {
+        this(target, false);
+    }
+    protected DeleteTask(File target, boolean ifEmpty) {
         super(target);
+        this.ifEmpty = ifEmpty;
     }
     protected DeleteTask(File target, File backup, boolean cleanup) {
         super(target, backup, cleanup);
+        ifEmpty = false;
     }
     @Override
     public boolean isDelete() {
@@ -72,7 +82,25 @@ class DeleteTask extends ContentTask {
     }
     @Override
     public void execute() throws ProvisionException {
-        IoUtils.recursiveDelete(target);
+        if(ifEmpty) {
+            if(target.list().length == 0) {
+                IoUtils.recursiveDelete(target);
+            }
+        } else {
+            IoUtils.recursiveDelete(target);
+        }
+    }
+    @Override
+    protected boolean canHashContent() {
+        return target.exists() && target.isFile();
+    }
+    @Override
+    protected byte[] getContentHash() throws ProvisionException {
+        try {
+            return HashUtils.hashFile(target);
+        } catch (IOException e) {
+            throw ProvisionErrors.hashCalculationFailed(target.getAbsolutePath(), e);
+        }
     }
     @Override
     public String toString() {

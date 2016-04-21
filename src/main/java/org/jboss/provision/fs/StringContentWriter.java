@@ -26,6 +26,8 @@ import java.io.File;
 import java.io.IOException;
 
 import org.jboss.provision.ProvisionErrors;
+import org.jboss.provision.ProvisionException;
+import org.jboss.provision.util.HashUtils;
 
 /**
  *
@@ -50,6 +52,18 @@ class StringContentWriter extends ContentWriter {
     @Override
     public void write(BufferedWriter writer) throws IOException {
         writer.write(content);
+    }
+    @Override
+    protected boolean canHashContent() {
+        return true;
+    }
+    @Override
+    protected byte[] getContentHash() throws ProvisionException {
+        try {
+            return HashUtils.hashBytes(content.getBytes());
+        } catch (IOException e) {
+            throw ProvisionErrors.hashCalculationFailed(content, e);
+        }
     }
     @Override
     public String toString() {

@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,15 +37,12 @@ import java.util.UUID;
 import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
 import org.jboss.provision.util.HashUtils;
-import org.jboss.provision.util.IoUtils;
 
 /**
  *
  * @author Alexey Loubyansky
  */
 public class MutableEnvImage extends EnvImage {
-
-    private static final String BACKUP = "backup";
 
     static class OpDescr {
         ContentTask contentTask;
@@ -61,24 +57,12 @@ public class MutableEnvImage extends EnvImage {
     private Map<String, OpDescr> updates = new LinkedHashMap<String, OpDescr>();
     private Map<String, MutableUserImage> users = Collections.emptyMap();
 
-    MutableEnvImage(FSEnvironment fsEnv, String sessionId) {
+    MutableEnvImage(FSEnvironment fsEnv, String sessionId) throws ProvisionException {
         super(fsEnv, sessionId);
     }
 
-    MutableEnvImage(FSEnvironment fsEnv) {
+    MutableEnvImage(FSEnvironment fsEnv) throws ProvisionException {
         super(fsEnv, UUID.randomUUID().toString());
-    }
-
-    File getBackupPath(String relativePath) throws ProvisionException {
-        return getBackupPath(relativePath, sessionId);
-    }
-
-    File getBackupPath(String relativePath, String sessionId) throws ProvisionException {
-        try {
-            return IoUtils.newFile(fsEnv.historyDir, sessionId, BACKUP, HashUtils.hashToHexString(relativePath));
-        } catch (IOException e) {
-            throw ProvisionErrors.hashCalculationFailed(relativePath, e);
-        }
     }
 
     @Override
@@ -141,7 +125,7 @@ public class MutableEnvImage extends EnvImage {
         if(node == null) {
             return super.contains(relativePath);
         }
-        return !node.isDeleted();
+        return node.exists();
     }
 
     @Override
@@ -159,15 +143,18 @@ public class MutableEnvImage extends EnvImage {
         if(node == null) {
             return super.getHash(relativePath);
         }
+        if(node.contentTask == null) {
+            return super.getHash(relativePath);
+        }
         try {
-            return getHash(node.getContentTask());
+            return getHash(node.contentTask);
         } catch (IOException e) {
             throw ProvisionErrors.hashCalculationFailed(relativePath, e);
         }
     }
 
     @Override
-    protected byte[] getHash(File target) throws IOException {
+    protected byte[] getHash(File target) throws ProvisionException, IOException {
         final OpDescr opDescr = updates.get(target.getAbsolutePath());
         if (opDescr == null) {
             return super.getHash(target);
@@ -175,15 +162,12 @@ public class MutableEnvImage extends EnvImage {
         return getHash(opDescr.contentTask);
     }
 
-    private byte[] getHash(ContentTask contentTask) throws IOException {
+    private byte[] getHash(ContentTask contentTask) throws ProvisionException, IOException {
         if (contentTask.isDelete()) {
             return null;
         }
-        if (contentTask.getContentFile() != null) {
-            return HashUtils.hashFile(contentTask.getContentFile());
-        }
-        if (contentTask.getContentString() != null) {
-            return HashUtils.hashBytes(contentTask.getContentString().getBytes());
+        if(contentTask.canHashContent()) {
+            return contentTask.getContentHash();
         }
         if (!contentTask.getTarget().exists()) {
             return null;
@@ -191,7 +175,7 @@ public class MutableEnvImage extends EnvImage {
         return HashUtils.hashFile(contentTask.getTarget());
     }
 
-    protected MutableEnvImage write(ContentWriter contentWriter) throws ProvisionException {
+    protected MutableEnvImage write(ContentTask contentWriter) throws ProvisionException {
         final String targetPath = contentWriter.getTarget().getAbsolutePath();
         final OpDescr descr = updates.get(targetPath);
         if(descr != null) {
@@ -209,16 +193,18 @@ public class MutableEnvImage extends EnvImage {
 
     protected MutableEnvImage write(ContentWriter contentWriter, String relativePath, String user, boolean dir) throws ProvisionException {
         final MutableUserImage userImage = getUserImage(user);
-        userImage.addPath(contentWriter.getTarget(), relativePath, dir, dir ? false : root.isOwnedBy(relativePath, user));
         root.write(userImage, relativePath, contentWriter, dir);
+        if(!dir) {
+            userImage.addPath(contentWriter.getTarget(), relativePath, root.isOwnedBy(relativePath, user));
+        }
         return this;
     }
 
     protected void delete(File target) throws ProvisionException {
-        scheduleDelete(null, target, new DeleteTask(target));
+        scheduleDelete(target, new DeleteTask(target));
     }
 
-    protected void scheduleDelete(String relativePath, File target, ContentTask task) throws ProvisionException {
+    protected void scheduleDelete(File target, ContentTask task) throws ProvisionException {
         final OpDescr descr = updates.get(target.getAbsolutePath());
         if (descr != null) {
             if (descr.contentTask == DeleteTask.DELETE_FLAG) {
@@ -230,68 +216,62 @@ public class MutableEnvImage extends EnvImage {
         }
         if(target.isDirectory()) {
             for(File f : target.listFiles()) {
-                scheduleDelete(relativePath == null ? null : relativePath + '/' + f.getName(), f, DeleteTask.DELETE_FLAG);
+                scheduleDelete(f, DeleteTask.DELETE_FLAG);
             }
         }
     }
 
-    protected MutableEnvImage delete(String relativePath, MutableUserImage userImage, boolean backupForHistory) throws ProvisionException {
+    protected MutableEnvImage delete(String relativePath, MutableUserImage userImage, boolean recordPath) throws ProvisionException {
         final File target = fsEnv.getFile(relativePath);
         if(!contains(relativePath)) {
-            giveUp(target, relativePath, userImage, backupForHistory);
+            giveUp(target, relativePath, userImage, recordPath);
             return this;
         }
-        scheduleDelete(target, relativePath, userImage, backupForHistory);
+        scheduleDelete(target, relativePath, userImage, recordPath);
         return this;
     }
 
-    protected void giveUp(File target, String relativePath, MutableUserImage userImage, boolean backupForHistory) throws ProvisionException {
+    protected void giveUp(File target, String relativePath, MutableUserImage userImage, boolean recordPath) throws ProvisionException {
         if(target.isDirectory()) {
             for(File child : target.listFiles()) {
                 final String childPath = relativePath + '/' + child.getName();
                 if(contains(childPath)) {
-                    giveUp(child, childPath, userImage, backupForHistory);
+                    giveUp(child, childPath, userImage, recordPath);
                 }
             }
         } else {
-            if(backupForHistory) {
-                userImage.removePath(relativePath, false);
+            if(recordPath) {
+                userImage.removePath(relativePath);
             }
             root.giveUp(userImage, relativePath, !target.exists());
         }
     }
 
-    protected boolean scheduleDelete(File target, String relativePath, MutableUserImage userImage, boolean backupForHistory) throws ProvisionException {
-        System.out.println("MutableEnvImage.scheduleDelete " + userImage.getUsername() + " " + relativePath + " backup=" + backupForHistory);
+    protected boolean scheduleDelete(File target, String relativePath, MutableUserImage userImage, boolean recordPath) throws ProvisionException {
         if(target.isDirectory()) {
             boolean childrenDeleted = true;
             for(File child : target.listFiles()) {
                 final String childPath = relativePath + '/' + child.getName();
                 if(contains(childPath)) {
-                    childrenDeleted = childrenDeleted && scheduleDelete(child, childPath, userImage, backupForHistory);
+                    childrenDeleted = childrenDeleted && scheduleDelete(child, childPath, userImage, recordPath);
                 }
             }
             if(childrenDeleted) {
-                userImage.removePath(relativePath, true);
                 root.deleteDir(userImage, relativePath, new DeleteTask(target));
             }
             return childrenDeleted;
         } else {
-            final DeleteTask task;
-            if(backupForHistory) {
-                userImage.removePath(relativePath, false);
-                task = new DeleteTask(target, getBackupPath(relativePath), false);
-            } else {
-                task = new DeleteTask(target);
+            if(recordPath) {
+                userImage.removePath(relativePath);
             }
-            return root.delete(userImage, relativePath, task);
+            return root.delete(userImage, relativePath, new DeleteTask(target));
         }
     }
 
     protected void grab(String relativePath, String user) throws ProvisionException {
-        if(!contains(relativePath)) {
-            return;
-        }
+//        if(!contains(relativePath)) {
+//            return;
+//        }
         root.grab(user, relativePath);
     }
 
@@ -299,49 +279,30 @@ public class MutableEnvImage extends EnvImage {
         write(new StringContentWriter(content, target));
     }
 
+    protected void write(File content, File target) throws ProvisionException {
+        write(new CopyFileContentWriter(content, target));
+    }
+
     protected MutableEnvImage write(String content, String relativePath, MutableUserImage userImage) throws ProvisionException {
-        final StringContentWriter mainTask = new StringContentWriter(content, fsEnv.getFile(relativePath), getBackupPath(relativePath), false);
+        final StringContentWriter mainTask = new StringContentWriter(content, fsEnv.getFile(relativePath));
         write(mainTask, relativePath, userImage.getUsername(), false);
-        try {
-            mainTask.subtask = new StringContentWriter(HashUtils.hashToHexString(content), new File(sessionDir, HashUtils.hashToHexString(relativePath)));
-        } catch(IOException e) {
-            throw ProvisionErrors.hashCalculationFailed(relativePath, e);
-        }
         return this;
     }
 
-    protected MutableEnvImage write(File content, String relativePath, String user, boolean backupForHistory) throws ProvisionException {
+    protected MutableEnvImage write(File content, String relativePath, String user) throws ProvisionException {
         assert user != null : ProvisionErrors.nullArgument("user");
-        if(backupForHistory) {
-            if(content.isDirectory()) {
-                final File[] files = content.listFiles();
-                if(files.length == 0) {
-                    mkdirs(relativePath, user);
-                } else {
-                    for (File f : files) {
-                        write(f, relativePath + '/' + f.getName(), user, backupForHistory);
-                    }
-                }
-            } else {
-                final CopyFileContentWriter mainTask = new CopyFileContentWriter(content, fsEnv.getFile(relativePath), getBackupPath(relativePath), false);
-                write(mainTask, relativePath, user, content.isDirectory());
-                try {
-                    mainTask.subtask = new StringContentWriter(HashUtils.bytesToHexString(HashUtils.hashFile(content)), new File(sessionDir, HashUtils.hashToHexString(relativePath)));
-                } catch(IOException e) {
-                    throw ProvisionErrors.hashCalculationFailed(relativePath, e);
-                }
-            }
-        } else if(content.isDirectory()) {
+        if (content.isDirectory()) {
             final File[] files = content.listFiles();
-            if(files.length == 0) {
+            if (files.length == 0) {
                 mkdirs(relativePath, user);
             } else {
                 for (File f : files) {
-                    write(f, relativePath + '/' + f.getName(), user, backupForHistory);
+                    write(f, relativePath + '/' + f.getName(), user);
                 }
             }
         } else {
-            write(new CopyFileContentWriter(content, fsEnv.getFile(relativePath)), relativePath, user, false);
+            final CopyFileContentWriter mainTask = new CopyFileContentWriter(content, fsEnv.getFile(relativePath));
+            write(mainTask, relativePath, user, false);
         }
         return this;
     }
@@ -382,12 +343,6 @@ public class MutableEnvImage extends EnvImage {
         root.schedulePersistence(this);
     }
 
-    protected void undo() throws ProvisionException {
-        UserHistory.undo(this, sessionId);
-        root.schedulePersistence(this);
-        super.scheduleDelete(this);
-    }
-
     public void commit() throws ProvisionException {
         schedulePersistence();
         executeUpdates();
@@ -402,13 +357,6 @@ public class MutableEnvImage extends EnvImage {
 
         // backup
         try {
-            final Iterator<ContentTask> tasks = root.getTasks();
-            while(tasks.hasNext()) {
-                ContentTask next = tasks.next();
-                ++i;
-                ops.add(next);
-                next.backup();
-            }
             for (OpDescr op : updates.values()) {
                 ++i;
                 ops.add(op.contentTask);

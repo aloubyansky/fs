@@ -230,4 +230,8 @@ public class ProvisionErrors {
     public static ProvisionException unexpectedTaskFormat() {
         return new ProvisionException("Unexpected task format");
     }
+
+    public static ProvisionException sessionRecordMissingForPath(String sessionId, String relativePath) {
+        return new ProvisionException("Session record " + sessionId + " is missing for path " + relativePath);
+    }
 }

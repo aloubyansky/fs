@@ -25,11 +25,9 @@ package org.jboss.provision.fs;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.NoSuchElementException;
 
-import org.jboss.provision.ProvisionErrors;
 import org.jboss.provision.ProvisionException;
 
 /**
@@ -40,12 +38,14 @@ public class RootPathNode extends PathNode {
 
     private static final String PATHS_REPO_DIR = "paths";
 
-    private final File pathsRepoDir;
-    private Map<String, PathNode> tasks = new HashMap<String, PathNode>();
+    private Map<String, PathNode> tasks = new LinkedHashMap<String, PathNode>();
 
-    RootPathNode(File f, File historyDir) {
-        super(null, f);
-        this.pathsRepoDir = new File(historyDir, PATHS_REPO_DIR);
+    RootPathNode(File f, File historyDir) throws ProvisionException {
+        super(null, "", f, new File(historyDir, PATHS_REPO_DIR), true);
+    }
+
+    PathNode getByHash(String hash, boolean dir) throws ProvisionException {
+        return getOrNew(PathNode.getPathForHash(nodeDir, hash), dir);
     }
 
     PathNode get(String relativePath) {
@@ -60,7 +60,11 @@ public class RootPathNode extends PathNode {
         return node;
     }
 
-    PathNode getOrNew(String relativePath) {
+    PathNode getOrNew(String relativePath) throws ProvisionException {
+        return getOrNew(relativePath, false);
+    }
+
+    PathNode getOrNew(String relativePath, boolean dir) throws ProvisionException {
         final String[] segments = relativePath.split("/");
         PathNode node = this;
         int i = 0;
@@ -68,9 +72,9 @@ public class RootPathNode extends PathNode {
             final String name = segments[i++];
             PathNode child = node.children.get(name);
             if(child == null) {
-                node = newChild(node, name);
+                node = newChild(node, name, dir || i < segments.length);
                 while(i < segments.length) {
-                    node = newChild(node, segments[i++]);
+                    node = newChild(node, segments[i++], dir || i < segments.length);
                 }
                 break;
             } else {
@@ -81,62 +85,15 @@ public class RootPathNode extends PathNode {
     }
 
     boolean isOwnedBy(String path, String user) throws ProvisionException {
-        PathNode node = tasks.get(path);
-        if(node == null) {
-            node = get(path);
-        }
-        if(node == null) {
-            final PathOwnership pathOwnership = loadOwnership(pathsRepoDir, path);
-            if(pathOwnership == null) {
-                return false;
-            }
-            return pathOwnership.isOwnedBy(user);
-        } else if(node.ownership == null) {
-            node.ownership = loadOwnership(pathsRepoDir, path);
-        }
-
-        if(node.ownership == null) {
-            return false;
-        }
-        return node.ownership.isOwnedBy(user);
+        return getOrNew(path).isOwnedBy(user);
     }
 
     boolean isOnlyOwner(String user, String path) throws ProvisionException {
-        PathNode node = tasks.get(path);
-        if(node == null) {
-            node = get(path);
-        }
-        if(node == null) {
-            final PathOwnership pathOwnership = loadOwnership(pathsRepoDir, path);
-            if(pathOwnership == null) {
-                return false;
-            }
-            return pathOwnership.isOnlyOwner(user);
-        } else if(node.ownership == null) {
-            node.ownership = loadOwnership(pathsRepoDir, path);
-        }
-
-        if(node.ownership == null) {
-            return false;
-        }
-        return node.ownership.isOnlyOwner(user);
+        return getOrNew(path).isOnlyOwner(user);
     }
 
     void grab(String user, String path) throws ProvisionException {
-        PathNode node = tasks.get(path);
-        if(node == null) {
-            node = getOrNew(path);
-        }
-        if(node.ownership == null) {
-            node.ownership = loadOwnership(pathsRepoDir, path);
-            if (node.ownership == null) {
-                node.ownership = new PathOwnership(user);
-            } else {
-                node.ownership.addUser(user);
-            }
-        } else {
-            node.ownership.addUser(user);
-        }
+        getOrNew(path).addOwner(user);
     }
 
     boolean giveUp(UserImage userImage, String path) throws ProvisionException {
@@ -144,25 +101,7 @@ public class RootPathNode extends PathNode {
     }
 
     boolean giveUp(UserImage userImage, String path, boolean safe) throws ProvisionException {
-        boolean removed = false;
-
-        PathNode node = tasks.get(path);
-        if(node == null) {
-            node = getOrNew(path);
-        }
-        if(node.ownership == null) {
-            node.ownership = loadOwnership(pathsRepoDir, path);
-        }
-        if(node.ownership != null) {
-            removed = node.ownership.removeUser(userImage.getUsername());
-        }
-        if(removed) {
-            return node.ownership.isOwned();
-        }
-        if(safe) {
-            return false;
-        }
-        throw ProvisionErrors.userDoesNotOwnTargetPath(userImage.getUsername(), path);
+        return getOrNew(path).removeOwner(userImage.getUsername(), safe);
     }
 
     boolean isDeleted(String relativePath) {
@@ -186,7 +125,7 @@ public class RootPathNode extends PathNode {
         for(String name : segments) {
             PathNode child = target.children.get(name);
             if(child == null) {
-                child = newChild(target, name);
+                child = newChild(target, name, true);
             } else {
                 if(child.isDeleted()) {
                     return;
@@ -208,10 +147,12 @@ public class RootPathNode extends PathNode {
 
         final String[] segments = relativePath.split("/");
         PathNode target = this;
-        for(String name : segments) {
+        int i = 0;
+        while(i < segments.length) {
+            final String name = segments[i++];
             PathNode child = target.children.get(name);
             if(child == null) {
-                child = newChild(target, name);
+                child = newChild(target, name, i < segments.length);
             } else {
                 if(child.isDeleted()) {
                     return true;
@@ -235,16 +176,19 @@ public class RootPathNode extends PathNode {
             String name = segments[i++];
             PathNode child = parent.children.get(name);
             if(child == null) {
-                child = newChild(parent, name);
+                child = newChild(parent, name, true);
+                if(!child.f.exists()) {
+                    setTask(child, new MkDirsWriter(child.f));
+                }
             } else if(child.isDeleted()) {
                 child.contentTask = null;
-                deleteChildren(child, userImage, child.getPath());
+                deleteChildren(child, userImage, child.getRelativePath());
             }
             parent = child;
         }
         PathNode target = parent.children.get(segments[i]);
         if(target == null) {
-            target = newChild(parent, segments[i]);
+            target = newChild(parent, segments[i], dir);
         } else if(dir && target.isDeleted()) {
             deleteChildren(target, userImage, relativePath);
         }
@@ -254,8 +198,8 @@ public class RootPathNode extends PathNode {
         }
     }
 
-    private static PathNode newChild(PathNode parent, String name) {
-        final PathNode leaf = new PathNode(parent, new File(parent.f, name));
+    private PathNode newChild(PathNode parent, String name, boolean dir) throws ProvisionException {
+        final PathNode leaf = PathNode.newPath(parent, name, dir);
         switch(parent.children.size()) {
             case 0:
                 parent.children = Collections.singletonMap(name, leaf);
@@ -288,49 +232,17 @@ public class RootPathNode extends PathNode {
 
     private void setTask(PathNode node, ContentTask task) {
         node.contentTask = task;
-        final String path = node.getPath();
+        final String path = node.getRelativePath();
         PathNode taskNode = tasks.get(path);
         if(taskNode == null) {
             tasks.put(path, node);
         }
     }
 
-    void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
+    protected void schedulePersistence(MutableEnvImage fsImage) throws ProvisionException {
         for(PathNode node : tasks.values()) {
-            node.schedulePersistence(fsImage, pathsRepoDir);
+            node.schedulePersistence(fsImage);
         }
-    }
-
-    Iterator<ContentTask> getTasks() {
-        return new Iterator<ContentTask>() {
-            final Iterator<PathNode> scheduledTasks = tasks.values().iterator();
-            private PathNode pathTasks;
-            @Override
-            public boolean hasNext() {
-                if(pathTasks != null) {
-                    return true;
-                }
-                pathTasks = doNext();
-                return pathTasks != null;
-            }
-            private PathNode doNext() {
-                while(scheduledTasks.hasNext()) {
-                    final PathNode pathTasks = scheduledTasks.next();
-                    if(pathTasks.contentTask != null) {
-                        return pathTasks;
-                    }
-                }
-                return null;
-            }
-            @Override
-            public ContentTask next() {
-                if(!hasNext()) {
-                    throw new NoSuchElementException();
-                }
-                ContentTask next = pathTasks.contentTask;
-                pathTasks = null;
-                return next;
-            }};
     }
 
     void clear() {
